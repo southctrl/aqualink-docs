@@ -1,0 +1,189 @@
+---
+title: 'Markdown syntax'
+description: 'Text, title, and styling for your Aqualink documentation'
+icon: 'text-size'
+---
+
+## Titles
+
+Best used for section headers in your Aqualink documentation.
+
+```md
+## Player Management
+```
+
+### Subtitles
+
+Best used for subsection headers like specific features or methods.
+
+```md
+### Creating a Connection
+```
+
+<Tip>
+Each **title** and **subtitle** creates an anchor and also shows up on the table of contents on the right, making it easy for developers to navigate your Aqualink docs.
+</Tip>
+
+## Text formatting
+
+We support most markdown formatting. Simply add `**`, `_`, or `~` around text to format it.
+
+| Style         | How to write it   | Result          |
+| ------------- | ----------------- | --------------- |
+| Bold          | `**bold**`        | **bold**        |
+| Italic        | `_italic_`        | _italic_        |
+| Strikethrough | `~strikethrough~` | ~strikethrough~ |
+
+You can combine these. For example, write `**_bold and italic_**` to get **_bold and italic_** text.
+
+You need to use HTML to write superscript and subscript text. That is, add `<sup>` or `<sub>` around your text.
+
+| Text Size   | How to write it          | Result                 |
+| ----------- | ------------------------ | ---------------------- |
+| Superscript | `<sup>superscript</sup>` | <sup>superscript</sup> |
+| Subscript   | `<sub>subscript</sub>`   | <sub>subscript</sub>   |
+
+## Linking to pages
+
+You can add a link by wrapping text in `[]()`. You would write `[Discord.js Guide](https://discordjs.guide)` to [Discord.js Guide](https://discordjs.guide).
+
+Links to pages in your Aqualink docs need to be root-relative. Include the entire folder path. For example, `[Player API](/api-reference/player)` links to the Player API reference page.
+
+```md
+[Quick Start Guide](/quickstart)
+[Player Methods](/api-reference/player)
+[Audio Filters](/guides/filters)
+```
+
+Relative links like `[Player API](../player)` will open slower because we cannot optimize them as easily.
+
+## Code Examples
+
+Since Aqualink is a code library, you'll frequently need to show code examples:
+
+### Inline Code
+
+Use backticks for inline code: `client.aqua.createConnection()` or `player.play()`.
+
+```md
+Use the `client.aqua.createConnection()` method to create a new player.
+```
+
+### Code Blocks
+
+Use triple backticks for code blocks with syntax highlighting:
+
+    ```javascript
+    const player = client.aqua.createConnection({
+        guildId: interaction.guild.id,
+        textChannel: interaction.channel.id,
+        voiceChannel: interaction.member.voice.channel.id
+    });
+
+    await player.play(track);
+    ```
+
+### Discord.js Integration Examples
+
+For complete bot command examples, use this format:
+
+    ```javascript
+    client.on('interactionCreate', async (interaction) => {
+        if (!interaction.isChatInputCommand()) return;
+        
+        if (interaction.commandName === 'play') {
+            const query = interaction.options.getString('song');
+            const player = client.aqua.createConnection({
+                guildId: interaction.guild.id,
+                textChannel: interaction.channel.id,
+                voiceChannel: interaction.member.voice.channel?.id
+            });
+            
+            const results = await player.search(query);
+            if (results.tracks.length > 0) {
+                await player.play(results.tracks[0]);
+                interaction.reply(`🎵 Now playing: **${results.tracks[0].title}**`);
+            }
+        }
+    });
+    ```
+
+## Blockquotes
+
+### Single line
+
+To create a blockquote, add a `>` in front of a paragraph.
+
+> The Aqualink library provides seamless integration with Discord.js for music bot development.
+
+```md
+> The Aqualink library provides seamless integration with Discord.js for music bot development.
+```
+
+### Multiline
+
+> Aqualink wraps the powerful Lavalink audio server to provide high-quality music streaming.
+>
+> It includes built-in queue management, audio filters, and failover support for production bots.
+
+```md
+> Aqualink wraps the powerful Lavalink audio server to provide high-quality music streaming.
+>
+> It includes built-in queue management, audio filters, and failover support for production bots.
+```
+
+## Music Bot Specific Formatting
+
+### Bot Commands
+
+When documenting slash commands, use this format:
+
+```md
+**Command:** `/play <song>`
+**Description:** Play a song or add it to the queue
+**Usage:** `/play Never Gonna Give You Up`
+```
+
+### Configuration Examples
+
+For configuration objects, use proper JSON formatting:
+
+```json
+{
+  "nodes": [{
+    "host": "localhost",
+    "port": 2333,
+    "password": "youshallnotpass"
+  }],
+  "defaultSearchPlatform": "ytsearch",
+  "leaveOnEnd": true
+}
+```
+
+### Event Documentation
+
+Document events with clear formatting:
+
+**Event:** `trackStart`  
+**Emitted:** When a track begins playing  
+**Parameters:** `track` (Track object)
+
+```javascript
+player.on('trackStart', (track) => {
+    console.log(`Now playing: ${track.title}`);
+});
+```
+
+## Tips for Aqualink Documentation
+
+<Tip>
+When documenting methods, always include both the method signature and a practical example showing how it would be used in a Discord bot.
+</Tip>
+
+<Warning>
+Remember to mention any prerequisites like voice channel permissions or Lavalink server requirements in your documentation.
+</Warning>
+
+<Note>
+Use consistent formatting for all your API documentation to make it easy for developers to understand and implement Aqualink in their bots.
+</Note>
