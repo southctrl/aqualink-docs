@@ -1,0 +1,973 @@
+---
+title: "Multi-Node Setup"
+description: "Configure and manage multiple Lavalink nodes for load balancing and high availability"
+icon: "server"
+---
+
+## Multi-Node Setup
+
+Scale your music bot across multiple Lavalink nodes for improved performance, load distribution, and high availability.
+
+## Basic Multi-Node Configuration
+
+### Simple Multi-Node Setup
+
+```javascript
+const { AquaLink } = require('aqualink');
+
+const aqua = new AquaLink({
+  nodes: [
+    {
+      host: 'node1.example.com',
+      port: 2333,
+      password: 'node1_password',
+      identifier: 'node-1',
+      region: 'us-east',
+      priority: 1
+    },
+    {
+      host: 'node2.example.com',
+      port: 2333,
+      password: 'node2_password', 
+      identifier: 'node-2',
+      region: 'us-west',
+      priority: 2
+    },
+    {
+      host: 'node3.example.com',
+      port: 2333,
+      password: 'node3_password',
+      identifier: 'node-3',
+      region: 'eu-central',
+      priority: 3
+    }
+  ],
+  loadBalancing: {
+    enabled: true,
+    strategy: 'round-robin'
+  }
+});
+```
+
+## Load Balancing Strategies
+
+### Round Robin
+
+```javascript
+const aqua = new AquaLink({
+  nodes: [...nodes],
+  loadBalancing: {
+    strategy: 'round-robin',
+    enabled: true
+  }
+});
+```
+
+### CPU-Based Load Balancing
+
+```javascript
+const aqua = new AquaLink({
+  nodes: [...nodes],
+  loadBalancing: {
+    strategy: 'cpu',
+    enabled: true,
+    cpuThreshold: 80
+  }
+});
+```
+
+### Memory-Based Load Balancing
+
+```javascript
+const aqua = new AquaLink({
+  nodes: [...nodes],
+  loadBalancing: {
+    strategy: 'memory',
+    enabled: true,
+    memoryThreshold: 75
+  }
+});
+```
+
+### Player Count Balancing
+
+```javascript
+const aqua = new AquaLink({
+  nodes: [...nodes],
+  loadBalancing: {
+    strategy: 'players',
+    enabled: true,
+    maxPlayersPerNode: 50
+  }
+});
+```
+
+### Region-Based Balancing
+
+```javascript
+const aqua = new AquaLink({
+  nodes: [...nodes],
+  loadBalancing: {
+    strategy: 'region',
+    enabled: true,
+    regionMapping: {
+      'us-east': ['guild1', 'guild2'],
+      'us-west': ['guild3', 'guild4'],
+      'eu-central': ['guild5', 'guild6']
+    }
+  }
+});
+```
+
+## Advanced Node Configuration
+
+### Node Specifications
+
+```javascript
+const nodeConfigs = [
+  {
+    host: 'premium-node.example.com',
+    port: 2333,
+    password: 'secure_password',
+    identifier: 'premium-1',
+    region: 'us-east-1',
+    priority: 1,
+    
+    specs: {
+      cpu: 8,
+      memory: '16GB',
+      bandwidth: '1Gbps'
+    },
+    
+    capabilities: {
+      filters: true,
+      seek: true,
+      volume: true,
+      pause: true
+    },
+    
+    limits: {
+      maxPlayers: 100,
+      maxCpuUsage: 85,
+      maxMemoryUsage: 80
+    },
+    
+    features: {
+      resuming: true,
+      sources: ['youtube', 'spotify', 'soundcloud'],
+      plugins: ['lavasrc', 'lavaplayer']
+    }
+  }
+];
+```
+
+### Dynamic Node Addition
+
+```javascript
+async function addNode(nodeConfig) {
+  try {
+    const node = await aqua.addNode(nodeConfig);
+    
+    console.log(`Node ${node.identifier} added successfully`);
+    console.log(`Status: ${node.connected ? 'Connected' : 'Disconnected'}`);
+    
+    return node;
+  } catch (error) {
+    console.error('Failed to add node:', error);
+    throw error;
+  }
+}
+
+const newNode = {
+  host: 'new-node.example.com',
+  port: 2333,
+  password: 'new_password',
+  identifier: 'dynamic-node-1'
+};
+
+await addNode(newNode);
+```
+
+### Node Removal
+
+```javascript
+async function removeNode(identifier, graceful = true) {
+  const node = aqua.nodes.get(identifier);
+  if (!node) {
+    throw new Error('Node not found');
+  }
+  
+  if (graceful) {
+    const players = Array.from(aqua.players.values())
+      .filter(player => player.node.identifier === identifier);
+    
+    console.log(`Migrating ${players.length} players...`);
+    
+    for (const player of players) {
+      await migratePlayer(player);
+    }
+  }
+  
+  await aqua.removeNode(identifier);
+  console.log(`Node ${identifier} removed successfully`);
+}
+```
+
+## Node Selection Logic
+
+### Custom Node Selector
+
+```javascript
+class CustomNodeSelector {
+  constructor(aqua) {
+    this.aqua = aqua;
+  }
+  
+  selectNode(guildId, options = {}) {
+    const availableNodes = this.getAvailableNodes();
+    
+    if (availableNodes.length === 0) {
+      throw new Error('No available nodes');
+    }
+    
+    if (options.preferredRegion) {
+      const regionalNodes = availableNodes.filter(node => 
+        node.region === options.preferredRegion
+      );
+      if (regionalNodes.length > 0) {
+        return this.selectBestNode(regionalNodes);
+      }
+    }
+    
+    return this.selectBestNode(availableNodes);
+  }
+  
+  getAvailableNodes() {
+    return Array.from(this.aqua.nodes.values())
+      .filter(node => node.connected && !this.isNodeOverloaded(node))
+      .sort((a, b) => this.getNodeScore(b) - this.getNodeScore(a));
+  }
+  
+  isNodeOverloaded(node) {
+    const stats = node.stats;
+    if (!stats) return false;
+    
+    const cpuUsage = stats.cpu?.systemLoad || 0;
+    const memoryUsage = (stats.memory?.used / stats.memory?.allocated) * 100 || 0;
+    const playerCount = stats.playingPlayers || 0;
+    
+    return cpuUsage > 85 || memoryUsage > 80 || playerCount > 100;
+  }
+  
+  getNodeScore(node) {
+    const stats = node.stats;
+    if (!stats) return 0;
+    
+    const cpuScore = Math.max(0, 100 - (stats.cpu?.systemLoad || 0));
+    const memoryScore = Math.max(0, 100 - ((stats.memory?.used / stats.memory?.allocated) * 100 || 0));
+    const playerScore = Math.max(0, 100 - ((stats.playingPlayers || 0) / 100 * 100));
+    const priorityScore = (node.priority || 999) === 1 ? 20 : 0;
+    
+    return cpuScore + memoryScore + playerScore + priorityScore;
+  }
+  
+  selectBestNode(nodes) {
+    return nodes[0];
+  }
+}
+
+const nodeSelector = new CustomNodeSelector(aqua);
+```
+
+## Player Migration
+
+### Seamless Migration
+
+```javascript
+async function migratePlayer(player, targetNode = null) {
+  if (!targetNode) {
+    targetNode = nodeSelector.selectNode(player.guildId);
+  }
+  
+  if (player.node.identifier === targetNode.identifier) {
+    console.log('Player already on target node');
+    return player;
+  }
+  
+  const state = {
+    guildId: player.guildId,
+    voiceChannel: player.voiceChannel,
+    textChannel: player.textChannel,
+    queue: [...player.queue.tracks],
+    current: player.queue.current,
+    position: player.position,
+    volume: player.volume,
+    filters: player.filters.current,
+    paused: player.paused,
+    repeatMode: player.repeatMode
+  };
+  
+  console.log(`Migrating player from ${player.node.identifier} to ${targetNode.identifier}`);
+  
+  await player.destroy();
+  
+  const newPlayer = aqua.createPlayer({
+    guildId: state.guildId,
+    voiceChannel: state.voiceChannel,
+    textChannel: state.textChannel,
+    node: targetNode.identifier
+  });
+  
+  await newPlayer.connect();
+  
+  if (state.queue.length > 0) {
+    newPlayer.queue.add(state.queue);
+  }
+  
+  if (state.current) {
+    await newPlayer.play(state.current, { startTime: state.position });
+    
+    if (state.paused) {
+      await newPlayer.pause();
+    }
+  }
+  
+  if (state.volume !== 100) {
+    await newPlayer.setVolume(state.volume);
+  }
+  
+  if (Object.keys(state.filters).length > 0) {
+    await newPlayer.filters.apply(state.filters);
+  }
+  
+  newPlayer.setRepeat(state.repeatMode);
+  
+  console.log('Player migration completed');
+  return newPlayer;
+}
+```
+
+### Batch Migration
+
+```javascript
+async function batchMigrateFromNode(sourceNodeId, targetNodeId = null) {
+  const sourceNode = aqua.nodes.get(sourceNodeId);
+  if (!sourceNode) {
+    throw new Error('Source node not found');
+  }
+  
+  const players = Array.from(aqua.players.values())
+    .filter(player => player.node.identifier === sourceNodeId);
+  
+  if (players.length === 0) {
+    console.log('No players to migrate');
+    return;
+  }
+  
+  console.log(`Starting batch migration of ${players.length} players`);
+  
+  const results = {
+    total: players.length,
+    successful: 0,
+    failed: 0,
+    errors: []
+  };
+  
+  for (const player of players) {
+    try {
+      const targetNode = targetNodeId ? 
+        aqua.nodes.get(targetNodeId) : 
+        nodeSelector.selectNode(player.guildId);
+      
+      await migratePlayer(player, targetNode);
+      results.successful++;
+      
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } catch (error) {
+      results.failed++;
+      results.errors.push({
+        guildId: player.guildId,
+        error: error.message
+      });
+    }
+  }
+  
+  console.log('Batch migration completed:', results);
+  return results;
+}
+```
+
+## Node Monitoring
+
+### Health Monitoring
+
+```javascript
+class NodeHealthMonitor {
+  constructor(aqua) {
+    this.aqua = aqua;
+    this.healthData = new Map();
+    this.alertThresholds = {
+      cpu: 90,
+      memory: 85,
+      responseTime: 1000,
+      playerCount: 150
+    };
+  }
+  
+  startMonitoring(interval = 30000) {
+    this.monitorInterval = setInterval(() => {
+      this.checkAllNodes();
+    }, interval);
+    
+    console.log('Node health monitoring started');
+  }
+  
+  stopMonitoring() {
+    if (this.monitorInterval) {
+      clearInterval(this.monitorInterval);
+      console.log('Node health monitoring stopped');
+    }
+  }
+  
+  async checkAllNodes() {
+    for (const [id, node] of this.aqua.nodes) {
+      await this.checkNodeHealth(node);
+    }
+  }
+  
+  async checkNodeHealth(node) {
+    const startTime = Date.now();
+    
+    try {
+      const stats = node.stats;
+      const responseTime = Date.now() - startTime;
+      
+      const health = {
+        nodeId: node.identifier,
+        connected: node.connected,
+        responseTime,
+        cpu: stats?.cpu?.systemLoad || 0,
+        memory: stats?.memory ? (stats.memory.used / stats.memory.allocated) * 100 : 0,
+        players: stats?.playingPlayers || 0,
+        uptime: stats?.uptime || 0,
+        timestamp: Date.now()
+      };
+      
+      this.healthData.set(node.identifier, health);
+      
+      this.checkAlerts(health);
+      
+    } catch (error) {
+      console.error(`Health check failed for node ${node.identifier}:`, error);
+    }
+  }
+  
+  checkAlerts(health) {
+    const alerts = [];
+    
+    if (health.cpu > this.alertThresholds.cpu) {
+      alerts.push(`High CPU usage: ${health.cpu.toFixed(1)}%`);
+    }
+    
+    if (health.memory > this.alertThresholds.memory) {
+      alerts.push(`High memory usage: ${health.memory.toFixed(1)}%`);
+    }
+    
+    if (health.responseTime > this.alertThresholds.responseTime) {
+      alerts.push(`High response time: ${health.responseTime}ms`);
+    }
+    
+    if (health.players > this.alertThresholds.playerCount) {
+      alerts.push(`High player count: ${health.players}`);
+    }
+    
+    if (alerts.length > 0) {
+      this.aqua.emit('nodeAlert', health.nodeId, alerts);
+    }
+  }
+  
+  getHealthReport() {
+    const report = {};
+    
+    for (const [nodeId, health] of this.healthData) {
+      report[nodeId] = {
+        status: health.connected ? 'online' : 'offline',
+        cpu: `${health.cpu.toFixed(1)}%`,
+        memory: `${health.memory.toFixed(1)}%`,
+        players: health.players,
+        responseTime: `${health.responseTime}ms`,
+        uptime: this.formatUptime(health.uptime)
+      };
+    }
+    
+    return report;
+  }
+  
+  formatUptime(uptime) {
+    const days = Math.floor(uptime / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((uptime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((uptime % (1000 * 60 * 60)) / (1000 * 60));
+    
+    return `${days}d ${hours}h ${minutes}m`;
+  }
+}
+
+const healthMonitor = new NodeHealthMonitor(aqua);
+healthMonitor.startMonitoring();
+```
+
+## Load Balancing Implementation
+
+### Custom Load Balancer
+
+```javascript
+class CustomLoadBalancer {
+  constructor(aqua) {
+    this.aqua = aqua;
+    this.roundRobinIndex = 0;
+  }
+  
+  selectOptimalNode(guildId, options = {}) {
+    const strategy = options.strategy || this.aqua.options.loadBalancing?.strategy || 'round-robin';
+    
+    switch (strategy) {
+      case 'cpu':
+        return this.selectByCpu();
+      case 'memory':
+        return this.selectByMemory();
+      case 'players':
+        return this.selectByPlayerCount();
+      case 'region':
+        return this.selectByRegion(guildId);
+      case 'priority':
+        return this.selectByPriority();
+      case 'round-robin':
+      default:
+        return this.selectRoundRobin();
+    }
+  }
+  
+  selectByCpu() {
+    const nodes = this.getAvailableNodes();
+    return nodes.reduce((best, node) => {
+      const bestCpu = best.stats?.cpu?.systemLoad || 100;
+      const nodeCpu = node.stats?.cpu?.systemLoad || 100;
+      return nodeCpu < bestCpu ? node : best;
+    });
+  }
+  
+  selectByMemory() {
+    const nodes = this.getAvailableNodes();
+    return nodes.reduce((best, node) => {
+      const bestMemory = this.getMemoryUsage(best);
+      const nodeMemory = this.getMemoryUsage(node);
+      return nodeMemory < bestMemory ? node : best;
+    });
+  }
+  
+  selectByPlayerCount() {
+    const nodes = this.getAvailableNodes();
+    return nodes.reduce((best, node) => {
+      const bestPlayers = best.stats?.playingPlayers || 0;
+      const nodePlayers = node.stats?.playingPlayers || 0;
+      return nodePlayers < bestPlayers ? node : best;
+    });
+  }
+  
+  selectByRegion(guildId) {
+    const guildRegion = this.getGuildRegion(guildId);
+    const nodes = this.getAvailableNodes();
+    
+    const regionalNodes = nodes.filter(node => node.region === guildRegion);
+    
+    if (regionalNodes.length > 0) {
+      return this.selectByCpu(regionalNodes);
+    }
+    
+    return this.selectByCpu(nodes);
+  }
+  
+  selectByPriority() {
+    const nodes = this.getAvailableNodes();
+    return nodes.sort((a, b) => (a.priority || 999) - (b.priority || 999))[0];
+  }
+  
+  selectRoundRobin() {
+    const nodes = this.getAvailableNodes();
+    
+    if (nodes.length === 0) {
+      throw new Error('No available nodes');
+    }
+    
+    const selected = nodes[this.roundRobinIndex % nodes.length];
+    this.roundRobinIndex++;
+    
+    return selected;
+  }
+  
+  getAvailableNodes() {
+    return Array.from(this.aqua.nodes.values())
+      .filter(node => node.connected && !this.isNodeOverloaded(node));
+  }
+  
+  getMemoryUsage(node) {
+    const stats = node.stats;
+    if (!stats?.memory) return 0;
+    return (stats.memory.used / stats.memory.allocated) * 100;
+  }
+  
+  isNodeOverloaded(node) {
+    const stats = node.stats;
+    if (!stats) return false;
+    
+    const limits = node.limits || {};
+    
+    if ((stats.cpu?.systemLoad || 0) > (limits.maxCpuUsage || 90)) {
+      return true;
+    }
+    
+    if (this.getMemoryUsage(node) > (limits.maxMemoryUsage || 85)) {
+      return true;
+    }
+    
+    if ((stats.playingPlayers || 0) > (limits.maxPlayers || 100)) {
+      return true;
+    }
+    
+    return false;
+  }
+  
+  getGuildRegion(guildId) {
+    return this.aqua.options.loadBalancing?.regionMapping?.[guildId] || 'us-east';
+  }
+}
+
+const loadBalancer = new CustomLoadBalancer(aqua);
+```
+
+## Node Statistics
+
+### Statistics Collector
+
+```javascript
+class NodeStatsCollector {
+  constructor(aqua) {
+    this.aqua = aqua;
+    this.stats = new Map();
+    this.history = new Map();
+  }
+  
+  startCollection(interval = 10000) {
+    this.collectionInterval = setInterval(() => {
+      this.collectStats();
+    }, interval);
+    
+    console.log('Node statistics collection started');
+  }
+  
+  stopCollection() {
+    if (this.collectionInterval) {
+      clearInterval(this.collectionInterval);
+      console.log('Node statistics collection stopped');
+    }
+  }
+  
+  collectStats() {
+    for (const [id, node] of this.aqua.nodes) {
+      if (!node.connected) continue;
+      
+      const stats = {
+        timestamp: Date.now(),
+        nodeId: id,
+        connected: node.connected,
+        players: {
+          total: node.stats?.players || 0,
+          playing: node.stats?.playingPlayers || 0
+        },
+        cpu: {
+          cores: node.stats?.cpu?.cores || 0,
+          systemLoad: node.stats?.cpu?.systemLoad || 0,
+          lavalinkLoad: node.stats?.cpu?.lavalinkLoad || 0
+        },
+        memory: {
+          free: node.stats?.memory?.free || 0,
+          used: node.stats?.memory?.used || 0,
+          allocated: node.stats?.memory?.allocated || 0,
+          reservable: node.stats?.memory?.reservable || 0
+        },
+        frameStats: node.stats?.frameStats ? {
+          sent: node.stats.frameStats.sent,
+          nulled: node.stats.frameStats.nulled,
+          deficit: node.stats.frameStats.deficit
+        } : null,
+        uptime: node.stats?.uptime || 0
+      };
+      
+      this.stats.set(id, stats);
+      this.updateHistory(id, stats);
+    }
+  }
+  
+  updateHistory(nodeId, stats) {
+    if (!this.history.has(nodeId)) {
+      this.history.set(nodeId, []);
+    }
+    
+    const history = this.history.get(nodeId);
+    history.push(stats);
+    
+    if (history.length > 1440) {
+      history.shift();
+    }
+  }
+  
+  getNodeStats(nodeId) {
+    return this.stats.get(nodeId);
+  }
+  
+  getAllStats() {
+    return Object.fromEntries(this.stats);
+  }
+  
+  getHistoricalStats(nodeId, timeframe = '1h') {
+    const history = this.history.get(nodeId) || [];
+    const now = Date.now();
+    
+    let cutoffTime;
+    switch (timeframe) {
+      case '5m': cutoffTime = now - (5 * 60 * 1000); break;
+      case '15m': cutoffTime = now - (15 * 60 * 1000); break;
+      case '1h': cutoffTime = now - (60 * 60 * 1000); break;
+      case '6h': cutoffTime = now - (6 * 60 * 60 * 1000); break;
+      case '24h': cutoffTime = now - (24 * 60 * 60 * 1000); break;
+      default: cutoffTime = now - (60 * 60 * 1000);
+    }
+    
+    return history.filter(stat => stat.timestamp >= cutoffTime);
+  }
+  
+  generateReport() {
+    const report = {
+      totalNodes: this.aqua.nodes.size,
+      connectedNodes: 0,
+      totalPlayers: 0,
+      playingPlayers: 0,
+      averageCpu: 0,
+      averageMemoryUsage: 0,
+      nodes: {}
+    };
+    
+    let cpuSum = 0;
+    let memorySum = 0;
+    let nodeCount = 0;
+    
+    for (const [nodeId, stats] of this.stats) {
+      if (stats.connected) {
+        report.connectedNodes++;
+        report.totalPlayers += stats.players.total;
+        report.playingPlayers += stats.players.playing;
+        
+        cpuSum += stats.cpu.systemLoad;
+        memorySum += (stats.memory.used / stats.memory.allocated) * 100;
+        nodeCount++;
+        
+        report.nodes[nodeId] = {
+          status: 'connected',
+          players: stats.players,
+          cpu: `${stats.cpu.systemLoad.toFixed(1)}%`,
+          memory: `${((stats.memory.used / stats.memory.allocated) * 100).toFixed(1)}%`,
+          uptime: this.formatUptime(stats.uptime)
+        };
+      } else {
+        report.nodes[nodeId] = {
+          status: 'disconnected'
+        };
+      }
+    }
+    
+    if (nodeCount > 0) {
+      report.averageCpu = (cpuSum / nodeCount).toFixed(1) + '%';
+      report.averageMemoryUsage = (memorySum / nodeCount).toFixed(1) + '%';
+    }
+    
+    return report;
+  }
+  
+  formatUptime(uptime) {
+    const days = Math.floor(uptime / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((uptime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((uptime % (1000 * 60 * 60)) / (1000 * 60));
+    
+    return `${days}d ${hours}h ${minutes}m`;
+  }
+}
+
+const statsCollector = new NodeStatsCollector(aqua);
+statsCollector.startCollection();
+```
+
+## Node Management Commands
+
+### Administrative Commands
+
+```javascript
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isCommand()) return;
+  
+  switch (interaction.commandName) {
+    case 'nodes':
+      await handleNodesCommand(interaction);
+      break;
+    case 'migrate':
+      await handleMigrateCommand(interaction);
+      break;
+    case 'nodestats':
+      await handleNodeStatsCommand(interaction);
+      break;
+  }
+});
+
+async function handleNodesCommand(interaction) {
+  const report = statsCollector.generateReport();
+  
+  const embed = {
+    title: '🖥️ Node Status',
+    color: 0x00ff00,
+    fields: [
+      {
+        name: '📊 Overview',
+        value: `Connected: ${report.connectedNodes}/${report.totalNodes}\nTotal Players: ${report.totalPlayers}\nPlaying: ${report.playingPlayers}`,
+        inline: true
+      },
+      {
+        name: '💻 Average Resources',
+        value: `CPU: ${report.averageCpu}\nMemory: ${report.averageMemoryUsage}`,
+        inline: true
+      }
+    ],
+    timestamp: new Date()
+  };
+  
+  Object.entries(report.nodes).forEach(([nodeId, stats]) => {
+    const statusEmoji = stats.status === 'connected' ? '🟢' : '🔴';
+    let value = `Status: ${stats.status}`;
+    
+    if (stats.status === 'connected') {
+      value += `\nPlayers: ${stats.players.playing}/${stats.players.total}`;
+      value += `\nCPU: ${stats.cpu}`;
+      value += `\nMemory: ${stats.memory}`;
+      value += `\nUptime: ${stats.uptime}`;
+    }
+    
+    embed.fields.push({
+      name: `${statusEmoji} ${nodeId}`,
+      value: value,
+      inline: true
+    });
+  });
+  
+  await interaction.reply({ embeds: [embed] });
+}
+
+async function handleMigrateCommand(interaction) {
+  const sourceNode = interaction.options.getString('source');
+  const targetNode = interaction.options.getString('target');
+  
+  if (!aqua.nodes.has(sourceNode)) {
+    return interaction.reply({ content: '❌ Source node not found!', ephemeral: true });
+  }
+  
+  if (targetNode && !aqua.nodes.has(targetNode)) {
+    return interaction.reply({ content: '❌ Target node not found!', ephemeral: true });
+  }
+  
+  await interaction.deferReply();
+  
+  try {
+    const results = await batchMigrateFromNode(sourceNode, targetNode);
+    
+    const embed = {
+      title: '🔄 Migration Results',
+      color: results.failed === 0 ? 0x00ff00 : 0xff9900,
+      fields: [
+        {
+          name: '📊 Summary',
+          value: `Total: ${results.total}\nSuccessful: ${results.successful}\nFailed: ${results.failed}`,
+          inline: true
+        }
+      ]
+    };
+    
+    if (results.errors.length > 0) {
+      const errorList = results.errors
+        .slice(0, 5)
+        .map(err => `${err.guildId}: ${err.error}`)
+        .join('\n');
+      
+      embed.fields.push({
+        name: '❌ Errors',
+        value: errorList + (results.errors.length > 5 ? '\n...' : ''),
+        inline: false
+      });
+    }
+    
+    await interaction.editReply({ embeds: [embed] });
+  } catch (error) {
+    await interaction.editReply({ 
+      content: `❌ Migration failed: ${error.message}` 
+    });
+  }
+}
+
+async function handleNodeStatsCommand(interaction) {
+  const nodeId = interaction.options.getString('node');
+  const timeframe = interaction.options.getString('timeframe') || '1h';
+  
+  if (!aqua.nodes.has(nodeId)) {
+    return interaction.reply({ content: '❌ Node not found!', ephemeral: true });
+  }
+  
+  const currentStats = statsCollector.getNodeStats(nodeId);
+  const historicalStats = statsCollector.getHistoricalStats(nodeId, timeframe);
+  
+  if (!currentStats) {
+    return interaction.reply({ content: '❌ No statistics available for this node!', ephemeral: true });
+  }
+  
+  const embed = {
+    title: `📈 ${nodeId} Statistics (${timeframe})`,
+    color: 0x0099ff,
+    fields: [
+      {
+        name: '🎵 Players',
+        value: `Playing: ${currentStats.players.playing}\nTotal: ${currentStats.players.total}`,
+        inline: true
+      },
+      {
+        name: '💻 CPU',
+        value: `System: ${currentStats.cpu.systemLoad.toFixed(1)}%\nLavalink: ${currentStats.cpu.lavalinkLoad.toFixed(1)}%\nCores: ${currentStats.cpu.cores}`,
+        inline: true
+      },
+      {
+        name: '🧠 Memory',
+        value: `Used: ${Math.round(currentStats.memory.used / 1024 / 1024)}MB\nFree: ${Math.round(currentStats.memory.free / 1024 / 1024)}MB\nAllocated: ${Math.round(currentStats.memory.allocated / 1024 / 1024)}MB`,
+        inline: true
+      }
+    ],
+    footer: {
+      text: `Data points: ${historicalStats.length} | Uptime: ${statsCollector.formatUptime(currentStats.uptime)}`
+    },
+    timestamp: new Date()
+  };
+  
+  if (currentStats.frameStats) {
+    embed.fields.push({
+      name: '🎭 Frame Stats',
+      value: `Sent: ${currentStats.frameStats.sent}\nNulled: ${currentStats.frameStats.nulled}\nDeficit: ${currentStats.frameStats.deficit}`,
+      inline: true
+    });
+  }
+  
+  await interaction.reply({ embeds: [embed] });
+}
+```
