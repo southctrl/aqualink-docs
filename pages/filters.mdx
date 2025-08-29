@@ -1,0 +1,280 @@
+---
+title: "Audio Filters"
+description: "Apply audio filters and effects to enhance your music playback experience"
+icon: "sliders"
+---
+
+## Audio Filters
+
+Apply audio filters and effects to enhance your music playback experience with AquaLink's built-in filter system.
+
+## Basic Filter Usage
+
+### Clear and Apply Filters
+
+```javascript
+player.filters.clearFilters();
+
+player.filters.setNightcore(true);
+player.filters.setBassboost(true);
+player.filters.set8D(true);
+```
+
+## Pre-built Filter Presets
+
+### Complete Filter Switch Example
+
+```javascript
+function applyFilterPreset(player, preset) {
+    let presetName;
+    
+    player.filters.clearFilters();
+    
+    switch (preset) {
+        case "8d":
+            player.filters.set8D(true);
+            presetName = '8D Audio';
+            break;
+        case "karaoke":
+            player.filters.setKaraoke(true);
+            presetName = 'Karaoke';
+            break;
+        case "timescale":
+            player.filters.setTimescale({ speed: 1.2, pitch: 1.2, rate: 1.0 });
+            presetName = 'Timescale';
+            break;
+        case "tremolo":
+            player.filters.setTremolo({ depth: 0.5, frequency: 4 });
+            presetName = 'Tremolo';
+            break;
+        case "vibrato":
+            player.filters.setVibrato({ depth: 0.5, frequency: 4 });
+            presetName = 'Vibrato';
+            break;
+        case "rotation":
+            player.filters.setRotation({ rotationHz: 0.2 });
+            presetName = 'Rotation';
+            break;
+        case "distortion":
+            player.filters.setDistortion({ distortion: 0.5 });
+            presetName = 'Distortion';
+            break;
+        case "channelMix":
+        case "channelmix":
+            player.filters.setChannelMix({ 
+                leftToLeft: 0.5, 
+                leftToRight: 0.5, 
+                rightToLeft: 0.5, 
+                rightToRight: 0.5 
+            });
+            presetName = 'Channel Mix';
+            break;
+        case "lowPass":
+        case "lowpass":
+            player.filters.setLowPass({ smoothing: 20 });
+            presetName = 'Low Pass';
+            break;
+        case "bassboost":
+            player.filters.setBassboost(true);
+            presetName = 'Bass Boost';
+            break;
+        case "slowmode":
+            player.filters.setSlowmode(true);
+            presetName = 'Slow Mode';
+            break;
+        case "nightcore":
+            player.filters.setNightcore(true);
+            presetName = 'Nightcore';
+            break;
+        case "vaporwave":
+            player.filters.setVaporwave(true);
+            presetName = 'Vaporwave';
+            break;
+        case "clear":
+        case "off":
+        case "reset":
+            player.filters.clearFilters();
+            presetName = 'Clear (No Filters)';
+            break;
+        default:
+            return null;
+    }
+    
+    return presetName;
+}
+
+const applied = applyFilterPreset(player, 'nightcore');
+if (applied) {
+    console.log(`✅ Applied ${applied} filter`);
+} else {
+    console.log('❌ Unknown filter preset');
+}
+```
+
+## Individual Filter Methods
+
+### Audio Enhancement Filters
+
+```javascript
+player.filters.setBassboost(true);
+player.filters.setNightcore(true);
+player.filters.setVaporwave(true);
+player.filters.setSlowmode(true);
+```
+
+### Spatial Audio Effects
+
+```javascript
+player.filters.set8D(true);
+
+player.filters.setRotation({ rotationHz: 0.2 });
+
+player.filters.setChannelMix({
+    leftToLeft: 1.0,    
+    leftToRight: 0.0,   
+    rightToLeft: 0.0, 
+    rightToRight: 1.0   
+});
+```
+
+### Modulation Effects
+
+```javascript
+player.filters.setTremolo({
+    depth: 0.5,      
+    frequency: 4   
+});
+
+player.filters.setVibrato({
+    depth: 0.5,      
+    frequency: 4   
+});
+```
+
+### Advanced Audio Processing
+
+```javascript
+player.filters.setDistortion({
+    distortion: 0.5  
+});
+
+player.filters.setLowPass({
+    smoothing: 20   
+});
+
+player.filters.setKaraoke(true);
+
+player.filters.setTimescale({
+    speed: 1.2,  
+    pitch: 1.2,
+});
+```
+
+## Filter Combinations
+
+### Combining Multiple Filters
+
+```javascript
+function applyCustomPreset(player, presetName) {
+    player.filters.clearFilters();
+    
+    switch (presetName) {
+        case 'party':
+            player.filters.setBassboost(true);
+            player.filters.set8D(true);
+            player.filters.setTremolo({ depth: 0.3, frequency: 2 });
+            break;
+            
+        case 'chill':
+            player.filters.setVaporwave(true);
+            player.filters.setLowPass({ smoothing: 15 });
+            break;
+            
+        case 'intense':
+            player.filters.setBassboost(true);
+            player.filters.setDistortion({ distortion: 0.3 });
+            player.filters.setTimescale({ speed: 1.1, pitch: 1.1, rate: 1.0 });
+            break;
+            
+        case 'vocal-focus':
+            player.filters.setChannelMix({
+                leftToLeft: 0.7,
+                leftToRight: 0.3,
+                rightToLeft: 0.3, 
+                rightToRight: 0.7
+            });
+            break;
+    }
+}
+
+applyCustomPreset(player, 'party');
+```
+
+## Command Implementation Example
+
+### Complete Filter Command
+
+```javascript
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isCommand() || interaction.commandName !== 'filter') return;
+    
+    const player = client.aqua.players.get(interaction.guild.id);
+    if (!player) {
+        return interaction.reply('❌ No active music player found!');
+    }
+    
+    const filterType = interaction.options.getString('type');
+    const presetName = applyFilterPreset(player, filterType);
+    
+    if (presetName) {
+        const embed = {
+            title: '🎛️ Filter Applied',
+            description: `Applied **${presetName}** filter to the current track.`,
+            color: 0x9932cc,
+            footer: { text: 'Use /filter clear to remove all filters' }
+        };
+        
+        await interaction.reply({ embeds: [embed] });
+    } else {
+        const availableFilters = [
+            '8d', 'karaoke', 'timescale', 'tremolo', 'vibrato', 
+            'rotation', 'distortion', 'channelmix', 'lowpass',
+            'bassboost', 'slowmode', 'nightcore', 'vaporwave', 'clear'
+        ];
+        
+        await interaction.reply({
+            content: `❌ Unknown filter! Available filters:\n\`${availableFilters.join('`, `')}\``,
+            ephemeral: true
+        });
+    }
+});
+```
+
+## Filter Persistence
+
+### Saving Filter Settings
+
+```javascript
+function saveFilterState(player, guildId) {
+    const filterState = {
+        guildId: guildId,
+        filters: player.filters.current || {},
+        timestamp: Date.now()
+    };
+    
+    console.log('Saved filter state:', filterState);
+}
+
+function restoreFilterState(player, guildId) {
+    const savedState = getSavedFilterState(guildId);
+    
+    if (savedState && savedState.filters) {
+        Object.entries(savedState.filters).forEach(([filterType, settings]) => {
+            if (settings === true) {
+                player.filters[`set${filterType.charAt(0).toUpperCase() + filterType.slice(1)}`](true);
+            } else if (typeof settings === 'object') {
+                player.filters[`set${filterType.charAt(0).toUpperCase() + filterType.slice(1)}`](settings);
+            }
+        });
+    }
+}
