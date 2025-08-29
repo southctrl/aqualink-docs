@@ -1,0 +1,461 @@
+---
+title: "Queue System"
+description: "View how to manage and utilize the built-in queue system in AquaLink"
+icon: "arrows-up-down"
+---
+
+## Queue Basics
+
+### Accessing the Queue
+
+Every player instance has a built-in queue system that manages tracks automatically.
+
+```javascript
+const player = client.aqua.players.get(interaction.guild.id);
+
+console.log('Queue length:', player.queue.size);
+console.log('Current track:', player.queue.current);
+console.log('Queue tracks:', player.queue.tracks);
+console.log('Total queue duration:', player.queue.duration);
+```
+
+### Player Creation and Management
+
+Before working with queues, you need to create a player connection:
+
+```javascript
+let player = client.aqua.createConnection({
+    guildId: message.guild.id,
+    voiceChannel: message.member.voice.channel.id,
+    textChannel: message.channel.id,
+    deaf: true,
+});
+
+await player.setVolume(65);
+
+player = client.aqua.players.get(message.guild.id);
+```
+
+### Adding Tracks to Queue
+
+The proper way to add tracks is through the resolve system:
+
+```javascript
+const resolve = await client.aqua.resolve({ 
+    query: 'never gonna give you up', 
+    requester: message.author 
+});
+
+if (resolve.loadType === 'track' || resolve.loadType === 'search') {
+    const track = resolve.tracks[0];
+    track.info.requester = message.author;
+    
+    player.queue.add(track);
+    
+    if (!player.playing && !player.paused) {
+        await player.play();
+    }
+}
+```
+
+### Handling Different Load Types
+
+```javascript
+const resolve = await client.aqua.resolve({ query, requester: message.author });
+
+if (resolve.loadType === 'playlist') {
+    let tracks = resolve.tracks || [];
+    
+    for (const track of tracks) {
+        track.info.requester = message.author;
+        player.queue.add(track);
+    }
+    
+    const playlistName = resolve.playlistInfo?.name || 'Unknown Playlist';
+    console.log(`Added ${tracks.length} tracks from ${playlistName}`);
+    
+} else if (resolve.loadType === 'search' || resolve.loadType === 'track') {
+    const track = resolve.tracks[0];
+    track.info.requester = message.author;
+    player.queue.add(track);
+}
+
+if (!player.playing && !player.paused) {
+    await player.play();
+}
+```
+
+## Queue Position Tracking
+
+### Getting Queue Position
+
+```javascript
+function getQueuePosition(player) {
+    const isCurrentlyPlaying = player.playing && player.queue.current;
+    const position = player.queue.size + (isCurrentlyPlaying ? 2 : 1);
+    return position;
+}
+
+function getPositionSuffix(num) {
+    if (num === 1) return '1st';
+    if (num === 2) return '2nd';
+    if (num === 3) return '3rd';
+    return `${num}th`;
+}
+
+const position = getQueuePosition(player);
+const positionText = getPositionSuffix(position);
+console.log(`Track added to ${positionText} position in queue`);
+```
+
+## File Upload Support
+
+### Handling Local Audio Files
+
+```javascript
+const supportedAudioFormats = ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.wma', '.m4a', '.opus', '.mp4', '.avi', '.mov', '.webm', '.mkv'];
+
+async function handleFileUpload(message) {
+    if (message.attachments.size > 0) {
+        const attachment = message.attachments.first();
+        const fileName = attachment.name.toLowerCase();
+        const hasValidExtension = supportedAudioFormats.some(ext => fileName.endsWith(ext));
+        
+        if (hasValidExtension) {
+            const localFileData = {
+                url: attachment.url,
+                name: attachment.name,
+                size: attachment.size
+            };
+            
+            try {
+                const resolve = await client.aqua.resolve({ 
+                    query: attachment.url, 
+                    requester: message.author 
+                });
+                
+                if (resolve.tracks && resolve.tracks.length > 0) {
+                    const track = resolve.tracks[0];
+                    
+                    track.info.requester = message.author;
+                    track.info.title = localFileData.name.replace(/\.[^/.]+$/, "");
+                    track.info.author = "Local File";
+                    track.info.uri = localFileData.url;
+                    
+                    player.queue.add(track);
+                    
+                    const fileSize = (localFileData.size / (1024 * 1024)).toFixed(2);
+                    console.log(`Added local file: ${localFileData.name} (${fileSize} MB)`);
+                    
+                    return true;
+                }
+            } catch (error) {
+                console.error('Local file processing error:', error);
+                return false;
+            }
+        }
+    }
+    return false;
+}
+```
+
+## Player Connection Management
+
+### Reconnection and Error Handling
+
+```javascript
+async function ensurePlayerConnection(message, client) {
+    let player = client.aqua.players.get(message.guild.id);
+    const botVoiceChannel = message.guild.members.cache.get(client.user.id)?.voice.channel;
+
+    if (!player) {
+        player = client.aqua.createConnection({
+            guildId: message.guild.id,
+            voiceChannel: message.member.voice.channel.id,
+            textChannel: message.channel.id,
+            deaf: true,
+        });
+        
+        await player.setVolume(65);
+        
+    } else {
+        if (!botVoiceChannel || !player.connected) {
+            try {
+                player.voiceChannel = message.member.voice.channel.id;
+                player.textChannel = message.channel.id;
+                await player.connect();
+                await player.setVolume(65);
+                
+                if (client.lavalinkManager) {
+                    client.lavalinkManager.clearInactivityTimer(message.guild.id);
+                }
+                
+            } catch (error) {
+                console.error('Error reconnecting player:', error);
+                
+                try {
+                    player.destroy();
+                    
+                    player = client.aqua.createConnection({
+                        guildId: message.guild.id,
+                        voiceChannel: message.member.voice.channel.id,
+                        textChannel: message.channel.id,
+                        deaf: true,
+                    });
+
+                    await player.setVolume(65);
+                    
+                } catch (recreationError) {
+                    console.error('Error recreating player:', recreationError);
+                    throw new Error('Failed to establish voice connection');
+                }
+            }
+        } else {
+            if (client.lavalinkManager) {
+                client.lavalinkManager.clearInactivityTimer(message.guild.id);
+            }
+        }
+    }
+    
+    return player;
+}
+```
+
+## Queue Display and Information
+
+### Advanced Queue Display
+
+```javascript
+function createQueueEmbed(player, page = 1) {
+    const tracksPerPage = 10;
+    const startIndex = (page - 1) * tracksPerPage;
+    const endIndex = startIndex + tracksPerPage;
+    const totalPages = Math.ceil(player.queue.size / tracksPerPage);
+    
+    const queueTracks = player.queue.tracks.slice(startIndex, endIndex);
+    
+    const embed = {
+        title: '📋 Music Queue',
+        description: createQueueDisplay(queueTracks, startIndex),
+        color: 0x1db954,
+        fields: [],
+        footer: {
+            text: `Page ${page} of ${totalPages} • Use queue <page> to view other pages`
+        }
+    };
+    
+    if (player.queue.current) {
+        embed.fields.push({
+            name: '🎵 Now Playing',
+            value: `**${player.queue.current.info.title}** by ${player.queue.current.info.author}`,
+            inline: false
+        });
+    }
+    
+    embed.fields.push({
+        name: 'Queue Statistics',
+        value: `**${player.queue.size}** tracks • **${formatDuration(player.queue.duration)}** total`,
+        inline: true
+    });
+    
+    return embed;
+}
+
+function createQueueDisplay(tracks, startIndex) {
+    return tracks.map((track, index) => {
+        const position = startIndex + index + 1;
+        const duration = formatDuration(track.info.duration);
+        const requester = track.info.requester?.displayName || 'Unknown';
+        
+        return `**${position}.** [${track.info.title}](${track.info.uri || '#'})\n` +
+               `└ ${track.info.author} • \`${duration}\` • Requested by ${requester}`;
+    }).join('\n\n');
+}
+```
+
+## Database Integration
+
+### Saving Default Settings
+
+```javascript
+async function getDefaultVolume(guildId) {
+    try {
+        const prefixData = await prefixSchema.findOne({ guildId });
+        return prefixData?.defaultVolume || 65;
+    } catch (error) {
+        console.error('[MUSIC] Error fetching default volume:', error);
+        return 65;
+    }
+}
+
+async function getDefaultSource(guildId) {
+    try {
+        const prefixData = await prefixSchema.findOne({ guildId });
+        return prefixData?.source || 'dzsearch';
+    } catch (error) {
+        console.error('[MUSIC] Error fetching default source:', error);
+        return 'dzsearch';
+    }
+}
+```
+
+## Error Handling Best Practices
+
+### Comprehensive Error Handling
+
+```javascript
+async function safePlayerOperation(operation, errorMessage = "An error occurred") {
+    try {
+        return await operation();
+    } catch (error) {
+        console.error(`[MUSIC] ${errorMessage}:`, error);
+        
+        if (error.message === 'Search timeout') {
+            throw new Error('Search timed out. Please try again.');
+        }
+        
+        if (error.message.includes('Failed to resolve')) {
+            throw new Error('Could not find the requested track.');
+        }
+        
+        throw new Error(errorMessage);
+    }
+}
+
+try {
+    await safePlayerOperation(
+        () => client.aqua.resolve({ query, requester: message.author }),
+        'Failed to search for track'
+    );
+} catch (error) {
+    const errorEmbed = Embed.error(`<@${message.author.id}>: **${error.message}**`);
+    const msg = await message.channel.send({ embeds: [errorEmbed] });
+    setTimeout(() => msg.delete().catch(() => {}), 8000);
+}
+```
+
+## Message Management
+
+### Auto-Deleting Messages
+
+```javascript
+async function sendTemporaryMessage(channel, embed, deleteAfter = 8000) {
+    try {
+        const msg = await channel.send({ embeds: [embed] });
+        setTimeout(() => msg.delete().catch(() => {}), deleteAfter);
+        return msg;
+    } catch (error) {
+        console.error('Failed to send temporary message:', error);
+    }
+}
+
+const successEmbed = Embed.success(`Track added to queue successfully`);
+await sendTemporaryMessage(message.channel, successEmbed);
+
+message.delete().catch(() => {});
+```
+
+## Player State Management
+
+### Basic Player Controls
+
+```javascript
+if (!player.playing && !player.paused) {
+    await player.play();
+}
+
+player.skip();
+
+player.stop();
+
+player.pause(true);
+player.pause(false);
+
+await player.setVolume(75);
+
+player.seek(30000);
+
+const position = player.position;
+```
+
+## Utility Functions
+
+### Essential Helper Functions
+
+```javascript
+function formatDuration(ms) {
+    if (!ms || ms === 0) return '0:00';
+    
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    
+    if (hours > 0) {
+        return `${hours}:${(minutes % 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${(seconds % 60).toString().padStart(2, '0')}`;
+}
+
+function isUrl(string) {
+    return string.startsWith('http') || string.startsWith('www.');
+}
+
+function validateVoicePermissions(member, bot, voiceChannel) {
+    const permissions = voiceChannel.permissionsFor(bot);
+    
+    if (!permissions.has('CONNECT')) {
+        throw new Error('Missing permission to connect to voice channel');
+    }
+    
+    if (!permissions.has('SPEAK')) {
+        throw new Error('Missing permission to speak in voice channel');
+    }
+    
+    return true;
+}
+```
+
+## Complete Play Command Pattern
+
+Here's a simplified version of your play command structure:
+
+```javascript
+async function playCommand(message, args, client) {
+    if (!client.aqua) {
+        throw new Error("Music system is not ready");
+    }
+
+    if (!message.member.voice.channel) {
+        throw new Error("You must be in a voice channel");
+    }
+
+    const player = await ensurePlayerConnection(message, client);
+
+    let query = args.join(' ');
+    const isFileUpload = await handleFileUpload(message);
+    
+    if (isFileUpload) return;
+    
+    if (!query) {
+        throw new Error("Missing song name, URL, or audio file");
+    }
+
+    const resolve = await client.aqua.resolve({ query, requester: message.author });
+
+    if (resolve.loadType === 'playlist') {
+        
+    } else if (resolve.loadType === 'search' || resolve.loadType === 'track') {
+        const track = resolve.tracks[0];
+        track.info.requester = message.author;
+        
+        const position = getQueuePosition(player);
+        player.queue.add(track);
+        
+        const embed = Embed.success(`Added **${track.info.title}** to queue position ${getPositionSuffix(position)}`);
+        await sendTemporaryMessage(message.channel, embed);
+    }
+
+    if (!player.playing && !player.paused) {
+        await player.play();
+    }
+}
