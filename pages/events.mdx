@@ -1,0 +1,277 @@
+---
+title: "Events"
+description: "All events emitted by AquaLink for building responsive music bots"
+icon: "bolt"
+---
+
+## All Events
+
+AquaLink emits a variety of events to keep you informed about the state of your music players and Lavalink nodes. You can listen for these events to build a responsive and interactive bot.
+
+## Player Events
+
+### Track Events
+
+<CodeGroup>
+
+```javascript Track Start
+client.aqua.on('trackStart', (player, track) => {
+    console.log(`Started playing: ${track.title}`);
+    
+    const embed = {
+        title: '🎵 Now Playing',
+        description: `**${track.title}**\nBy ${track.author}`,
+        color: 0x00ff00
+    };
+    player.textChannel.send({ embeds: [embed] });
+});
+```
+
+```javascript Track End
+client.aqua.on('trackEnd', (player, track, payload) => {
+    console.log(`Track ended: ${track.title} (Reason: ${payload})`);
+    
+    if (payload.reason === 'FINISHED') {
+        console.log('Track finished normally');
+    } else if (payload.reason === 'STOPPED') {
+        console.log('Track was stopped');
+    }
+});
+```
+
+```javascript Track Error
+client.aqua.on('trackError', (player, track, payload) => {
+    console.log(`Track error: ${track.title} (Error: ${payload})`);
+    
+    player.textChannel.send('❌ An error occurred while playing the track!');
+    
+    if (player.queue.length > 0) {
+        player.skip();
+    }
+});
+```
+
+```javascript Track Stuck
+client.aqua.on('trackStuck', (player, error, track) => {
+    console.log(`Track stuck: ${track.title}`);
+    
+    player.textChannel.send('⚠️ Track appears to be stuck, skipping...');
+    player.skip();
+});
+```
+
+</CodeGroup>
+
+### Connection Events
+
+<CodeGroup>
+
+```javascript Socket Closed
+client.aqua.on('socketClosed', (player, track, payload) => {
+    console.log(`Socket closed: ${payload.code} - ${payload.reason}`);
+    
+    if (payload.code === 1000) {
+        console.log('Normal closure');
+    } else {
+        console.log('Unexpected closure, attempting reconnect...');
+    }
+});
+```
+
+```javascript Player Destroy
+client.aqua.on('playerDestroy', (guildId) => {
+    console.log(`Player destroyed for guild: ${guildId}`);
+});
+```
+
+</CodeGroup>
+
+### Lyrics Events
+
+<CodeGroup>
+
+```javascript Lyrics Found
+client.aqua.on('lyricsFound', (player, track, payload) => {
+    console.log(`Lyrics found for: ${track.title}`);
+    
+    const embed = {
+        title: `🎤 Lyrics - ${track.title}`,
+        description: payload.lyrics.substring(0, 2000), 
+        color: 0x9932cc
+    };
+    player.textChannel.send({ embeds: [embed] });
+});
+```
+
+```javascript Lyrics Line
+client.aqua.on('lyricsLine', (player, track, payload) => {
+    console.log(`Current lyric line: ${payload.line}`);
+});
+```
+
+```javascript Lyrics Not Found
+client.aqua.on('lyricsNotFound', (player, track, payload) => {
+    console.log(`No lyrics found for: ${track.title}`);
+    
+    player.textChannel.send('📝 No lyrics available for this track.');
+});
+```
+
+</CodeGroup>
+
+### Queue Events
+
+```javascript Queue End
+client.aqua.on('queueEnd', (player) => {
+    console.log('Queue has ended');
+    
+    const embed = {
+        title: '📭 Queue Empty',
+        description: 'The queue has ended. Add more tracks to continue!',
+        color: 0xff6b6b
+    };
+    player.textChannel.send({ embeds: [embed] });
+    
+    setTimeout(() => {
+        if (player.queue.length === 0) {
+            player.destroy();
+        }
+    }, 300000);
+});
+```
+
+## Node Events
+
+### Connection Events
+
+<CodeGroup>
+
+```javascript Node Connect
+client.aqua.on('nodeConnect', (node) => {
+    console.log(`✅ Node ${node.name} connected`);
+    console.log(`Node stats: ${node.stats.players} players, ${node.stats.playingPlayers} playing`);
+    
+    console.log(`Node ${node.name} (${node.host}:${node.port}) is ready!`);
+});
+```
+
+```javascript Node Disconnect
+client.aqua.on('nodeDisconnect', (node, reason) => {
+    console.log(`❌ Node ${node.name} disconnected: ${reason}`);
+    
+    if (reason.code === 1006) {
+        console.log('Node disconnected abnormally, attempting reconnect...');
+    }
+    
+    console.warn(`Lavalink node ${node.name} is offline!`);
+});
+```
+
+```javascript Node Destroy
+client.aqua.on('nodeDestroy', (node) => {
+    console.log(`🗑️ Node ${node.name} destroyed`);
+    
+    console.log(`Cleaned up resources for node: ${node.name}`);
+});
+```
+
+```javascript Node Error
+client.aqua.on('nodeError', (node, error) => {
+    console.error(`❌ Node ${node.name} error:`, error);
+    
+    console.error(`Error details:`, {
+        node: node.name,
+        host: node.host,
+        port: node.port,
+        error: error.message,
+        stack: error.stack
+    });
+    
+    if (error.code === 'ECONNREFUSED') {
+        console.log('Connection refused, check if Lavalink server is running');
+    }
+});
+```
+
+</CodeGroup>
+
+## Event Usage Examples
+
+### Building a Status System
+
+```javascript Complete Status Tracking
+const playerStates = new Map();
+
+client.aqua.on('trackStart', (player, track) => {
+    playerStates.set(player.guildId, {
+        status: 'playing',
+        track: track,
+        startTime: Date.now()
+    });
+});
+
+client.aqua.on('trackEnd', (player, track, payload) => {
+    const state = playerStates.get(player.guildId);
+    if (state) {
+        state.status = 'idle';
+        state.lastTrack = track;
+        state.endReason = payload.reason;
+    }
+});
+
+client.aqua.on('playerDestroy', (guildId) => {
+    playerStates.delete(guildId);
+});
+```
+
+### Auto-Moderation System
+
+```javascript Auto Skip Bad Tracks
+const errorCounts = new Map();
+
+client.aqua.on('trackError', (player, track, payload) => {
+    const trackId = track.encoded;
+    const count = errorCounts.get(trackId) || 0;
+    errorCounts.set(trackId, count + 1);
+    
+    if (count >= 2) {
+        console.log(`Track ${track.title} has errored ${count + 1} times, removing from queue`);
+        player.queue = player.queue.filter(t => t.encoded !== trackId);
+    }
+    
+    player.skip();
+});
+```
+
+### Health Monitoring
+
+```javascript Node Health Monitor
+client.aqua.on('nodeConnect', (node) => {
+    console.log(`Node ${node.name} online - Health check starting`);
+    
+    const healthCheck = setInterval(() => {
+        if (node.connected) {
+            console.log(`${node.name} Stats:`, {
+                players: node.stats.players,
+                playing: node.stats.playingPlayers,
+                uptime: node.stats.uptime,
+                memory: `${Math.round(node.stats.memory.used / 1024 / 1024)}MB`
+            });
+        } else {
+            clearInterval(healthCheck);
+        }
+    }, 30000); 
+});
+
+client.aqua.on('nodeDisconnect', (node) => {
+    console.warn(`🚨 Node ${node.name} went offline! Failover procedures initiated.`);
+});
+```
+
+<Warning>
+Remember to handle events gracefully and avoid blocking the event loop with heavy operations. Use `setImmediate()` or `process.nextTick()` for intensive tasks within event handlers.
+</Warning>
+
+<Tip>
+Events are emitted in real-time, making them perfect for building live status displays, logging systems, and responsive user interfaces. Combine multiple events to create comprehensive monitoring and control systems.
+</Tip>
