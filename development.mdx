@@ -1,0 +1,253 @@
+---
+title: 'Development'
+description: 'Set up your local development environment for Aqualink'
+---
+
+<Info>
+  **Prerequisites**:
+  - Node.js version 16 or higher
+  - A running Lavalink server
+  - Discord bot token and application
+</Info>
+
+Follow these steps to set up your development environment and start building with Aqualink.
+
+<Steps>
+<Step title="Install Aqualink">
+
+```bash
+npm install aqualink
+# or
+yarn add aqualink
+# or
+pnpm add aqualink
+```
+
+</Step>
+
+<Step title="Set up Lavalink server">
+
+Download and configure your Lavalink server for development:
+
+1. Download the latest Lavalink.jar from [GitHub releases](https://github.com/lavalink-devs/Lavalink/releases)
+2. Create an `application.yml` file:
+
+```yaml
+server:
+  port: 2333
+  address: 0.0.0.0
+lavalink:
+  server:
+    password: "youshallnotpass"
+    sources:
+      youtube: true
+      bandcamp: true
+      soundcloud: true
+      twitch: true
+      vimeo: true
+      http: true
+      local: false
+```
+
+3. Start your Lavalink server:
+```bash
+java -jar Lavalink.jar
+```
+
+</Step>
+
+<Step title="Create your bot">
+
+Set up your Discord bot with Aqualink:
+
+```javascript
+const { Client, GatewayIntentBits } = require('discord.js');
+const { Aqua } = require('aqualink');
+
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildMessages
+    ]
+});
+
+client.aqua = new Aqua(client, {
+    nodes: [{
+        host: 'localhost',
+        port: 2333,
+        password: 'youshallnotpass'
+    }]
+});
+
+client.on('ready', async () => {
+    await client.aqua.init(client.user.id);
+    console.log('Bot is ready!');
+});
+
+client.login(process.env.DISCORD_TOKEN);
+```
+
+</Step>
+</Steps>
+
+## Environment Configuration
+
+Set up your environment variables for development:
+
+```bash
+# .env file
+DISCORD_TOKEN=your_bot_token_here
+LAVALINK_HOST=localhost
+LAVALINK_PORT=2333
+LAVALINK_PASSWORD=youshallnotpass
+```
+
+Then load them in your application:
+
+```javascript
+require('dotenv').config();
+
+client.aqua = new Aqua(client, {
+    nodes: [{
+        host: process.env.LAVALINK_HOST,
+        port: process.env.LAVALINK_PORT,
+        password: process.env.LAVALINK_PASSWORD
+    }]
+});
+```
+
+## Development Scripts
+
+Add these helpful scripts to your `package.json`:
+
+```json
+{
+  "scripts": {
+    "dev": "node --watch index.js",
+    "start": "node index.js",
+    "test": "node test.js"
+  }
+}
+```
+
+## Hot Reloading
+
+For faster development, use Node.js built-in watch mode:
+
+```bash
+npm run dev
+```
+
+This will automatically restart your bot when you make changes to your code.
+
+## Testing Your Setup
+
+Create a simple test command to verify everything is working:
+
+```javascript
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isChatInputCommand()) return;
+
+    if (interaction.commandName === 'test') {
+        const player = client.aqua.createConnection({
+            guildId: interaction.guild.id,
+            textChannel: interaction.channel.id,
+            voiceChannel: interaction.member.voice.channel?.id,
+            deaf: true
+        });
+
+        if (player) {
+            interaction.reply('✅ Aqualink connection successful!');
+        } else {
+            interaction.reply('❌ Failed to create player connection');
+        }
+    }
+});
+```
+
+## IDE Setup
+
+We recommend using these extensions for the best development experience:
+
+### Visual Studio Code
+- **Discord.js IntelliSense** - Autocomplete for Discord.js
+- **JavaScript and TypeScript** - Built-in support
+- **Prettier** - Code formatting
+- **ESLint** - Code linting
+
+### Configuration Files
+
+Create these files in your project root:
+
+**.eslintrc.json**
+```json
+{
+  "extends": ["eslint:recommended"],
+  "env": {
+    "node": true,
+    "es2021": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 12
+  }
+}
+```
+
+**.prettierrc**
+```json
+{
+  "semi": true,
+  "singleQuote": true,
+  "tabWidth": 2,
+  "trailingComma": "es5"
+}
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Error: Cannot connect to Lavalink server">
+    This usually means your Lavalink server isn't running or the connection details are incorrect.
+    
+    1. Verify your Lavalink server is running: check `http://localhost:2333`
+    2. Check your `application.yml` configuration
+    3. Ensure the password matches in both files
+    4. Try restarting the Lavalink server
+  </Accordion>
+
+  <Accordion title="Error: Missing Access - connect to voice channel">
+    Your bot needs proper permissions to join voice channels.
+    
+    1. Ensure your bot has "Connect" and "Speak" permissions
+    2. Check if the voice channel isn't full or restricted
+    3. Verify the user is in a voice channel when creating the connection
+  </Accordion>
+
+  <Accordion title="Error: No tracks found">
+    This can happen when search sources aren't properly configured.
+    
+    1. Check your Lavalink `application.yml` sources configuration
+    2. Ensure YouTube and other sources are enabled (`true`)
+    3. Try different search terms or platforms
+    4. Check Lavalink logs for detailed error messages
+  </Accordion>
+
+  <Accordion title="Node.js version compatibility">
+    Aqualink requires Node.js 16 or higher for optimal performance.
+    
+    1. Check your Node version: `node --version`
+    2. Update Node.js if needed
+    3. Clear node_modules and reinstall: `rm -rf node_modules && npm install`
+  </Accordion>
+</AccordionGroup>
+
+## Development Best Practices
+
+- **Use environment variables** for sensitive data like tokens
+- **Implement proper error handling** for all Aqualink operations
+- **Test with different audio sources** to ensure compatibility
+- **Monitor Lavalink server logs** during development
+- **Use TypeScript** for better development experience and type safety
+
+Ready to start building? Check out our [API Reference](/api-reference) for detailed documentation on all available methods and events.

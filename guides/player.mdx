@@ -1,0 +1,91 @@
+---
+title: "Player Control"
+description: "Control audio playback with play, pause, skip, volume, and seeking functions"
+icon: "circle-play"
+---
+
+## Playback Control
+
+Control audio playback with play, pause, skip, volume, and seeking functions.
+
+## Basic Playback Controls
+
+### Play/Pause
+
+```javascript
+player.play();
+
+player.pause(true);
+
+player.pause(false);
+
+const isPaused = player.paused;
+player.pause(!isPaused);
+```
+
+### Stop & Skip
+
+```javascript
+player.stop();
+
+player.skip();
+```
+
+## Volume Control
+
+```javascript
+player.setVolume(50);   
+player.setVolume(100);  
+player.setVolume(150);  
+
+console.log('Current volume:', player.volume);
+```
+
+## Seeking
+
+```javascript
+player.seek(60000);  
+player.seek(120000); 
+
+function seekToPercentage(percentage) {
+    const track = player.queue.current;
+    if (track && track.isSeekable) {
+        const position = (track.duration * percentage) / 100;
+        player.seek(position);
+        console.log(`Seeked to ${percentage}%`);
+    }
+}
+
+seekToPercentage(50);  
+```
+
+## Queue Management
+
+### Queue Operations
+
+```javascript
+player.queue.add(track);
+
+for (const track of tracks) {
+  player.queue.add(track);
+}
+
+player.queue.remove(2);
+
+player.queue.clear();
+
+player.queue.shuffle();
+
+console.log('Queue size:', player.queue.size);
+console.log('Current track:', player.queue.current?.title);
+```
+
+### Loop Modes
+
+```javascript
+player.setLoop('none');     
+player.setLoop('track');    
+player.setLoop('queue');    
+
+console.log('Loop mode:', player.loop);
+```

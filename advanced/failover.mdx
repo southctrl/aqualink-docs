@@ -1,0 +1,482 @@
+---
+title: "Failover System"
+description: "Automatic failover and recovery mechanisms for high availability music playback"
+icon: "shield-check"
+---
+
+## Configuration
+
+### Basic Failover Setup
+
+```javascript
+const { Aqua } = require('aqualink');
+
+const aqua = new Aqua(client, {
+  nodes: [
+    {
+      host: 'localhost',
+      port: 2333,
+      password: 'youshallnotpass',
+      secure: false,
+      name: 'main-node'
+    },
+    {
+      host: 'backup.server.com',
+      port: 2333,
+      password: 'backup_password',
+      secure: false,
+      name: 'backup-node'
+    }
+  ],
+  defaultSearchPlatform: 'ytsearch',
+  shouldDeleteMessage: false,
+  leaveOnEnd: true,
+  restVersion: 'v4',
+  plugins: [],
+  autoResume: false,
+  infiniteReconnects: false,
+  failoverOptions: {
+    enabled: true,
+    maxRetries: 3,
+    retryDelay: 1000,
+    preservePosition: true,
+    resumePlayback: true,
+    cooldownTime: 5000,
+    maxFailoverAttempts: 5
+  }
+});
+```
+
+## Failover Configuration Options
+
+### Available Options
+
+```javascript
+const failoverOptions = {
+  enabled: true,
+  maxRetries: 3,
+  retryDelay: 1000,
+  preservePosition: true,
+  resumePlayback: true,
+  cooldownTime: 5000,
+  maxFailoverAttempts: 5
+};
+```
+
+### Option Descriptions
+
+- `enabled`: Whether failover is active
+- `maxRetries`: Maximum retry attempts per failure
+- `retryDelay`: Delay between retries (milliseconds)
+- `preservePosition`: Keep track position during failover
+- `resumePlayback`: Automatically resume after failover
+- `cooldownTime`: Wait time before allowing new failover attempts
+- `maxFailoverAttempts`: Total failover attempts before giving up
+
+## Multiple Nodes Setup
+
+### Adding Backup Nodes
+
+```javascript
+const aqua = new Aqua(client, {
+  nodes: [
+    {
+      host: 'primary.server.com',
+      port: 2333,
+      password: 'primary_pass',
+      secure: false,
+      name: 'primary-node'
+    },
+    {
+      host: 'secondary.server.com',
+      port: 2333,
+      password: 'secondary_pass',
+      secure: false,
+      name: 'secondary-node'
+    },
+    {
+      host: 'tertiary.server.com',
+      port: 2333,
+      password: 'tertiary_pass',
+      secure: false,
+      name: 'tertiary-node'
+    }
+  ],
+  failoverOptions: {
+    enabled: true,
+    maxRetries: 5,
+    retryDelay: 2000,
+    preservePosition: true,
+    resumePlayback: true,
+    cooldownTime: 10000,
+    maxFailoverAttempts: 10
+  }
+});
+```
+
+## Event Handling
+
+### Failover Events
+
+```javascript
+aqua.on('nodeDisconnected', (node, code, reason) => {
+  console.log(`Node ${node.name} disconnected: ${reason}`);
+});
+
+aqua.on('nodeReconnected', (node) => {
+  console.log(`Node ${node.name} reconnected successfully`);
+});
+
+aqua.on('nodeError', (node, error) => {
+  console.error(`Node ${node.name} error:`, error);
+});
+
+aqua.on('playerMoved', (player, oldNode, newNode) => {
+  console.log(`Player moved from ${oldNode.name} to ${newNode.name}`);
+});
+```
+
+## Node Management
+
+### Check Node Status
+
+```javascript
+function getNodeStatus() {
+  const nodes = aqua.nodes;
+  const status = {};
+  
+  for (const [name, node] of nodes) {
+    status[name] = {
+      connected: node.connected,
+      players: node.players.size,
+      stats: node.stats
+    };
+  }
+  
+  return status;
+}
+
+console.log('Node Status:', getNodeStatus());
+```
+
+### Get Available Nodes
+
+```javascript
+function getAvailableNodes() {
+  return Array.from(aqua.nodes.values())
+    .filter(node => node.connected)
+    .map(node => ({
+      name: node.name,
+      players: node.players.size,
+      connected: node.connected
+    }));
+}
+```
+
+## Player State Preservation
+
+### State Backup During Failover
+
+```javascript
+class PlayerStateManager {
+  constructor() {
+    this.states = new Map();
+  }
+  
+  backup(player) {
+    const state = {
+      guildId: player.guild,
+      voiceChannel: player.voiceChannel,
+      textChannel: player.textChannel,
+      queue: player.queue.tracks,
+      currentTrack: player.queue.current,
+      position: player.position,
+      volume: player.volume,
+      paused: player.paused,
+      timestamp: Date.now()
+    };
+    
+    this.states.set(player.guild, state);
+    return state;
+  }
+  
+  restore(player, state) {
+    if (!state) return false;
+    
+    try {
+      if (state.queue && state.queue.length > 0) {
+        for (const track of state.queue) {
+          player.queue.add(track);
+        }
+      }
+      
+      if (state.currentTrack && state.preservePosition) {
+        player.queue.unshift(state.currentTrack);
+        player.seek(state.position);
+      }
+      
+      if (state.volume !== 100) {
+        player.setVolume(state.volume);
+      }
+      
+      if (state.paused) {
+        player.pause();
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to restore player state:', error);
+      return false;
+    }
+  }
+}
+
+const stateManager = new PlayerStateManager();
+```
+
+## Manual Node Operations
+
+### Force Node Switch
+
+```javascript
+async function movePlayerToNode(guildId, targetNodeName) {
+  const player = aqua.players.get(guildId);
+  if (!player) {
+    console.log('Player not found');
+    return false;
+  }
+  
+  const targetNode = aqua.nodes.get(targetNodeName);
+  if (!targetNode || !targetNode.connected) {
+    console.log('Target node not available');
+    return false;
+  }
+  
+  const state = stateManager.backup(player);
+  
+  try {
+    await player.destroy();
+    
+    const newPlayer = aqua.createConnection({
+      guildId: guildId,
+      voiceChannel: state.voiceChannel,
+      textChannel: state.textChannel
+    });
+    
+    stateManager.restore(newPlayer, state);
+    
+    console.log(`Player moved to ${targetNodeName}`);
+    return true;
+  } catch (error) {
+    console.error('Manual node switch failed:', error);
+    return false;
+  }
+}
+```
+
+### Node Health Check
+
+```javascript
+async function checkNodeHealth(nodeName) {
+  const node = aqua.nodes.get(nodeName);
+  if (!node) {
+    return { healthy: false, error: 'Node not found' };
+  }
+  
+  return {
+    healthy: node.connected,
+    players: node.players.size,
+    uptime: node.uptime,
+    stats: node.stats
+  };
+}
+
+async function checkAllNodesHealth() {
+  const results = {};
+  
+  for (const [name, node] of aqua.nodes) {
+    results[name] = await checkNodeHealth(name);
+  }
+  
+  return results;
+}
+```
+
+## Monitoring
+
+### Failover Metrics
+
+```javascript
+class FailoverMetrics {
+  constructor() {
+    this.metrics = {
+      totalFailovers: 0,
+      successfulFailovers: 0,
+      failedFailovers: 0,
+      nodeFailures: new Map(),
+      lastFailover: null
+    };
+    
+    this.setupEventListeners();
+  }
+  
+  setupEventListeners() {
+    aqua.on('nodeDisconnected', (node) => {
+      this.recordNodeFailure(node.name);
+    });
+    
+    aqua.on('playerMoved', (player, oldNode, newNode) => {
+      this.recordFailover(true, oldNode.name, newNode.name);
+    });
+  }
+  
+  recordNodeFailure(nodeName) {
+    const current = this.metrics.nodeFailures.get(nodeName) || 0;
+    this.metrics.nodeFailures.set(nodeName, current + 1);
+  }
+  
+  recordFailover(success, fromNode, toNode) {
+    this.metrics.totalFailovers++;
+    
+    if (success) {
+      this.metrics.successfulFailovers++;
+    } else {
+      this.metrics.failedFailovers++;
+    }
+    
+    this.metrics.lastFailover = {
+      timestamp: Date.now(),
+      success,
+      fromNode,
+      toNode
+    };
+  }
+  
+  getReport() {
+    const successRate = this.metrics.totalFailovers > 0 
+      ? (this.metrics.successfulFailovers / this.metrics.totalFailovers) * 100 
+      : 0;
+    
+    return {
+      ...this.metrics,
+      successRate: successRate.toFixed(2) + '%'
+    };
+  }
+}
+
+const metrics = new FailoverMetrics();
+```
+
+## Testing
+
+### Simulate Node Failure
+
+```javascript
+async function simulateNodeFailure(nodeName) {
+  const node = aqua.nodes.get(nodeName);
+  if (!node) {
+    console.log('Node not found');
+    return;
+  }
+  
+  console.log(`Simulating failure for node: ${nodeName}`);
+  
+  const affectedPlayers = Array.from(aqua.players.values())
+    .filter(player => player.node.name === nodeName);
+  
+  console.log(`${affectedPlayers.length} players will be affected`);
+  
+  node.disconnect();
+  
+  setTimeout(() => {
+    console.log('Attempting to reconnect node...');
+    node.connect();
+  }, 10000);
+}
+```
+
+### Failover Test
+
+```javascript
+async function testFailover() {
+  console.log('Starting failover test...');
+  
+  const initialNodes = getAvailableNodes();
+  console.log('Initial nodes:', initialNodes);
+  
+  if (initialNodes.length < 2) {
+    console.log('Need at least 2 nodes for failover test');
+    return;
+  }
+  
+  const primaryNode = initialNodes[0].name;
+  await simulateNodeFailure(primaryNode);
+  
+  setTimeout(() => {
+    const remainingNodes = getAvailableNodes();
+    console.log('Nodes after failure:', remainingNodes);
+    
+    const activePlayerCount = aqua.players.size;
+    console.log(`Active players after failover: ${activePlayerCount}`);
+  }, 5000);
+}
+```
+
+## Error Handling
+
+### Failover Error Recovery
+
+```javascript
+aqua.on('nodeError', async (node, error) => {
+  console.error(`Node ${node.name} encountered error:`, error.message);
+  
+  if (error.code === 'ECONNREFUSED') {
+    console.log('Connection refused, marking node as unavailable');
+  }
+  
+  const availableNodes = getAvailableNodes();
+  if (availableNodes.length === 0) {
+    console.error('No available nodes for failover!');
+    
+    await notifyAdmins('Critical: All music nodes are down');
+  }
+});
+
+async function notifyAdmins(message) {
+  console.error('ADMIN NOTIFICATION:', message);
+}
+```
+
+## Best Practices
+
+### Optimal Configuration
+
+```javascript
+const aqua = new Aqua(client, {
+  nodes: [
+    { host: 'primary.domain.com', port: 2333, password: 'pass1', name: 'primary' },
+    { host: 'backup.domain.com', port: 2333, password: 'pass2', name: 'backup' }
+  ],
+  failoverOptions: {
+    enabled: true,
+    maxRetries: 3,
+    retryDelay: 1500,
+    preservePosition: true,
+    resumePlayback: true,
+    cooldownTime: 10000,
+    maxFailoverAttempts: 5
+  }
+});
+```
+
+### Monitoring Setup
+
+```javascript
+setInterval(() => {
+  const healthReport = checkAllNodesHealth();
+  const metricsReport = metrics.getReport();
+  
+  console.log('Health Report:', healthReport);
+  console.log('Metrics Report:', metricsReport);
+}, 30000);
+```

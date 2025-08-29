@@ -1,0 +1,175 @@
+---
+title: "Quickstart"
+description: "Get started with Aqualink - the powerful Discord Lavalink wrapper"
+---
+
+## Get started with Aqualink in three steps
+
+Set up Aqualink and start building music bots with enhanced Lavalink functionality.
+
+### Step 1: Installation and Setup
+
+<AccordionGroup>
+  <Accordion icon="download" title="Install Aqualink">
+    Install Aqualink in your Node.js project using your preferred package manager:
+    
+    ```bash
+    npm install aqualink
+    # or
+    yarn add aqualink
+    # or
+    pnpm add aqualink
+    ```
+  </Accordion>
+  
+  <Accordion icon="server" title="Set up Lavalink server">
+    Before using Aqualink, you need a running Lavalink server:
+    
+    1. Download the latest Lavalink.jar from [GitHub releases](https://github.com/lavalink-devs/Lavalink/releases)
+    2. Create an `application.yml` configuration file
+    3. Start your Lavalink server: `java -jar Lavalink.jar`
+    
+    <Tip>Make sure your Lavalink server is running before initializing Aqualink!</Tip>
+  </Accordion>
+</AccordionGroup>
+
+### Step 2: Initialize Aqualink
+
+<AccordionGroup>
+  <Accordion icon="code" title="Quick setup">
+    Create your first Aqualink instance and connect to your Lavalink server:
+    
+    ```javascript
+    const { Client, GatewayIntentBits } = require('discord.js');
+    const { Aqua } = require('aqualink');
+
+    const client = new Client({
+        intents: [
+            GatewayIntentBits.Guilds,
+            GatewayIntentBits.GuildVoiceStates,
+            GatewayIntentBits.GuildMessages
+        ]
+    });
+
+    client.aqua = new Aqua(client, {
+        nodes: [{
+            host: 'localhost',
+            port: 2333,
+            password: 'youshallnotpass'
+        }]
+    });
+
+    client.on('ready', async () => {
+        await client.aqua.init(client.user.id);
+        console.log('Bot is ready and connected to Lavalink!');
+    });
+
+    client.login('YOUR_BOT_TOKEN');
+    ```
+  </Accordion>
+  
+  <Accordion icon="cog" title="Complete configuration">
+    For production use, here's a full configuration with all available options:
+    
+    ```javascript
+    const { Aqua } = require('aqualink');
+
+    const aqua = new Aqua(client, {
+      nodes: [{
+        host: 'localhost',
+        port: 2333,
+        password: 'youshallnotpass',
+        secure: false,
+        name: 'main-node'
+      }],
+      defaultSearchPlatform: 'ytsearch',
+      shouldDeleteMessage: false,
+      leaveOnEnd: true,
+      restVersion: 'v4',
+      plugins: [],
+      autoResume: false,
+      infiniteReconnects: false,
+      failoverOptions: {
+        enabled: true,
+        maxRetries: 3,
+        retryDelay: 1000,
+        preservePosition: true,
+        resumePlayback: true,
+        cooldownTime: 5000,
+        maxFailoverAttempts: 5
+      }
+    });
+    ```
+    
+    <Tip>The failover options provide robust error handling and automatic reconnection!</Tip>
+  </Accordion>
+</AccordionGroup>
+
+### Step 3: Play your first track
+
+<Accordion icon="play" title="Create a player and play music">
+  Here's how to create a connection and play your first track:
+  
+  ```javascript
+  // Create a player connection
+  const player = client.aqua.createConnection({
+      guildId: interaction.guild.id,
+      textChannel: interaction.channel.id,
+      voiceChannel: interaction.member.voice.channel.id,
+      deaf: true,
+      defaultVolume: 100
+  });
+
+  // Search and play a track
+  client.on('interactionCreate', async (interaction) => {
+      if (interaction.commandName === 'play') {
+          const query = interaction.options.getString('song');
+          
+          const results = await player.search(query);
+          if (results.tracks.length > 0) {
+              await player.play(results.tracks[0]);
+              interaction.reply(`Now playing: ${results.tracks[0].title}`);
+          } else {
+              interaction.reply('No tracks found!');
+          }
+      }
+  });
+  ```
+</Accordion>
+
+## Next steps
+
+Explore Aqualink's powerful features for Discord music bots:
+
+<CardGroup cols={2}>
+  <Card title="Player Management" icon="play" href="/guides/player">
+    Learn how to create, manage, and control music players.
+  </Card>
+  
+  <Card title="Queue System" icon="list" href="/guides/queue">
+    Implement playlists and queue management for your bot.
+  </Card>
+  
+  <Card title="Audio Filters" icon="sliders" href="/guides/filters">
+    Add effects like bass boost, nightcore, and more to audio.
+  </Card>
+  
+  <Card title="Events & Listeners" icon="bell" href="/guides/events">
+    Handle player events and create responsive music experiences.
+  </Card>
+</CardGroup>
+
+## Key Features
+
+Aqualink provides enhanced functionality over standard Lavalink clients:
+
+- **Easy-to-use API** with intuitive methods and properties
+- **Built-in queue management** with shuffle, loop, and skip functionality  
+- **Advanced search** supporting YouTube, Spotify, SoundCloud, and more
+- **Audio filters** for dynamic sound modification
+- **Event-driven architecture** for responsive bot behavior
+- **TypeScript support** with full type definitions
+
+<Note>
+  **Need help?** Check out our [API Reference](/api-reference) or join our community Discord server for support and examples.
+</Note>

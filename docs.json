@@ -1,0 +1,81 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Aqualink",
+  "colors": {
+    "primary": "#16A34A",
+    "light": "#07C983",
+    "dark": "#15803D"
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Getting started",
+            "pages": [
+              "index",
+              "quickstart",
+              "development"
+            ]
+          },
+          {
+            "group": "Essentials",
+            "pages": [
+              "essentials/markdown"
+            ]
+          },
+          {
+            "group": "Advanced Features",
+            "pages": [
+              "advanced/failover",
+              "advanced/multi-node"
+            ]
+          },
+          {
+            "group": "Usage & Implementation",
+            "pages": [
+              "usage/Tracks",
+              "usage/Queue"
+            ]
+          },
+          {
+            "group": "Events & Integration",
+            "pages": [
+              "events/events"
+            ]
+          },
+          {
+            "group": "User Guides",
+            "pages": [
+              "guides/filters",
+              "guides/player",
+              "guides/search"
+            ]
+          },
+          {
+            "group": "Support",
+            "pages": [
+              "more/Troubleshooting"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Support",
+        "href": "https://discord.gg/UKNDx2JWa5"
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/ToddyTheNoobDud/AquaLink",
+      "discord": "https://discord.gg/UKNDx2JWa5"
+    }
+  }
+}

@@ -1,0 +1,162 @@
+---
+title: "Searching"
+description: "Search for tracks across different platforms and handle various search result types"
+icon: "magnifying-glass"
+---
+
+## Searching
+
+Search for tracks across different platforms and handle various search result types.
+
+## Basic Search
+
+```javascript
+const member = interaction.member;
+const result = await client.aqua.resolve({
+    query: 'Rick Astley Never Gonna Give You Up',
+    member
+});
+
+console.log('Search results:');
+console.log('Type:', result.type);
+console.log('Tracks found:', result.tracks.length);
+
+if (result.tracks.length > 0) {
+    const track = result.tracks[0];
+    console.log('First result:', track.title, 'by', track.author);
+}
+```
+
+## Platform-Specific Searches
+
+```javascript
+const member = interaction.member;
+
+const ytResult = await client.aqua.resolve({
+    query: 'Imagine Dragons Believer',
+    defaultSearchPlatform: 'ytsearch',
+    member
+});
+
+const spotifyResult = await client.aqua.resolve({
+    query: 'The Weeknd Blinding Lights',
+    defaultSearchPlatform: 'spsearch',
+    member
+});
+
+const scResult = await client.aqua.resolve({
+    query: 'Lofi Hip Hop',
+    defaultSearchPlatform: 'scsearch',
+    member
+});
+```
+
+## Search Result Types
+
+### Handling Different Result Types
+
+```javascript
+const result = await client.aqua.resolve({
+    query: query,
+    member: interaction.member
+});
+
+switch (result.type) {
+    case 'TRACK':
+        player.queue.add(result.tracks[0]);
+        await interaction.reply(`🎵 Added **${result.tracks[0].title}** to queue`);
+        break;
+        
+    case 'PLAYLIST':
+        player.queue.add(...result.tracks);
+        await interaction.reply(`📋 Added **${result.tracks.length}** tracks from playlist`);
+        break;
+        
+    case 'SEARCH':
+        if (result.tracks.length === 0) {
+            await interaction.reply('❌ No tracks found!');
+        } else {
+            player.queue.add(result.tracks[0]);
+            await interaction.reply(`🎵 Added **${result.tracks[0].title}** to queue`);
+        }
+        break;
+        
+    default:
+        await interaction.reply('❌ No results found for your search.');
+}
+```
+
+## Advanced Search Options
+
+### Search with Limits
+
+```javascript
+const result = await client.aqua.resolve({
+    query: 'epic music',
+    member: interaction.member,
+    searchLimit: 10
+});
+
+if (result.tracks.length > 1) {
+    const options = result.tracks.slice(0, 5).map((track, index) => ({
+        label: track.title.substring(0, 100),
+        description: `By ${track.author}`.substring(0, 100),
+        value: index.toString()
+    }));
+    
+    const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId('track_select')
+        .setPlaceholder('Choose a track')
+        .addOptions(options);
+}
+```
+
+### Direct URL Resolution
+
+```javascript
+const urlResult = await client.aqua.resolve({
+    query: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    member: interaction.member
+});
+
+if (urlResult.type === 'TRACK') {
+    player.queue.add(urlResult.tracks[0]);
+    await interaction.reply(`🔗 Added track from URL: **${urlResult.tracks[0].title}**`);
+} else if (urlResult.type === 'PLAYLIST') {
+    player.queue.add(...urlResult.tracks);
+    await interaction.reply(`🔗 Added **${urlResult.tracks.length}** tracks from playlist URL`);
+}
+```
+
+## Error Handling
+
+### Search Error Management
+
+```javascript
+async function safeSearch(query, member, interaction) {
+    try {
+        const result = await client.aqua.resolve({
+            query: query,
+            member: member
+        });
+        
+        if (!result || !result.tracks || result.tracks.length === 0) {
+            return await interaction.reply('❌ No tracks found for your search.');
+        }
+        
+        return result;
+        
+    } catch (error) {
+        console.error('Search error:', error);
+        
+        if (error.message.includes('timeout')) {
+            return await interaction.reply('⏱️ Search timed out. Please try again.');
+        }
+        
+        if (error.message.includes('unavailable')) {
+            return await interaction.reply('❌ This track is not available in your region.');
+        }
+        
+        return await interaction.reply('❌ An error occurred while searching. Please try again.');
+    }
+}

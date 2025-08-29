@@ -1,0 +1,234 @@
+---
+title: "Troubleshooting"
+description: "Common issues and solutions when working with Aqualink"
+icon: "wrench"
+---
+
+## Connection Issues
+
+### Node Connection Failed
+
+Check if your Lavalink server is running and accessible.
+
+```javascript
+const node = client.aqua._leastUsedNodesCache[0];
+if (!node.connected) {
+    console.log('Node is not connected');
+}
+```
+
+**Solutions:**
+- Verify Lavalink server is running: `java -jar Lavalink.jar`
+- Check if the port is correct in your configuration
+- Ensure firewall isn't blocking the connection
+- Verify the password matches in both `application.yml` and your bot config
+
+### Voice Channel Issues
+
+Ensure your bot has proper permissions to join voice channels.
+
+```javascript
+const permissions = voiceChannel.permissionsFor(client.user);
+if (!permissions.has('Connect') || !permissions.has('Speak')) {
+    throw new Error('Missing voice channel permissions');
+}
+```
+
+**Solutions:**
+- Grant "Connect" and "Speak" permissions to your bot
+- Check if the voice channel has user limits
+- Verify the user is in a voice channel before creating connection
+- Ensure the bot isn't already in another voice channel
+
+### Authentication Failed
+
+If you're getting authentication errors with Lavalink:
+
+```javascript
+const nodeConfig = {
+    host: 'localhost',
+    port: 2333,
+    password: 'youshallnotpass',
+    secure: false 
+};
+```
+
+**Solutions:**
+- Double-check the password in your `application.yml` file
+- Restart the Lavalink server after changing configuration
+- Ensure you're using the correct host and port
+
+## Common Errors
+
+<AccordionGroup>
+  <Accordion title="Error: No available nodes">
+    **Cause:** All Lavalink nodes are disconnected
+    
+    **Solution:** 
+    - Check node configuration and ensure Lavalink server is running
+    - Verify network connectivity between bot and Lavalink server
+    - Check Lavalink server logs for connection errors
+    - Restart both Lavalink server and your bot
+  </Accordion>
+
+  <Accordion title="Error: Track load failed">
+    **Cause:** Track couldn't be loaded or played
+    
+    **Solution:**
+    - Check if the track URL is valid and accessible
+    - Verify your Lavalink server has the required audio sources enabled
+    - Try searching with different platforms (YouTube, SoundCloud, etc.)
+    - Check your internet connection and DNS resolution
+    
+    ```javascript
+    // Enable different sources in application.yml
+    sources:
+      youtube: true
+      bandcamp: true
+      soundcloud: true
+      twitch: true
+    ```
+  </Accordion>
+
+  <Accordion title="Error: Player not found">
+    **Cause:** Trying to control a non-existent player
+    
+    **Solution:**
+    - Create a player connection first before controlling playback
+    - Check if the player was destroyed or disconnected
+    - Verify you're using the correct guild ID
+    
+    ```javascript
+    // Always check if player exists
+    let player = client.aqua.players.get(guildId);
+    if (!player) {
+        player = client.aqua.createConnection({
+            guildId: guildId,
+            textChannel: textChannelId,
+            voiceChannel: voiceChannelId
+        });
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Error: Cannot read property 'channel' of null">
+    **Cause:** User is not in a voice channel
+    
+    **Solution:**
+    - Always check if the user is in a voice channel before creating connections
+    
+    ```javascript
+    if (!interaction.member.voice.channel) {
+        return interaction.reply('❌ You need to be in a voice channel!');
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Error: Missing Access">
+    **Cause:** Bot doesn't have permission to join the voice channel
+    
+    **Solution:**
+    - Check bot permissions in the specific voice channel
+    - Ensure the voice channel isn't full
+    - Verify the channel isn't restricted to certain roles
+    
+    ```javascript
+    const voiceChannel = interaction.member.voice.channel;
+    const botPermissions = voiceChannel.permissionsFor(interaction.guild.members.me);
+    
+    if (!botPermissions.has(['Connect', 'Speak'])) {
+        return interaction.reply('❌ I need Connect and Speak permissions!');
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Search Issues
+
+### No Search Results
+
+If searches aren't returning results:
+
+```javascript
+// youtube search
+const results = await player.search('ytsearch:never gonna give you up');
+// soundcloud search
+const results = await player.search('scsearch:never gonna give you up');
+```
+
+**Solutions:**
+- Use platform prefixes: `ytsearch:`, `scsearch:`, `spsearch:`
+- Check if the search sources are enabled in Lavalink
+- Try simpler search terms
+- Verify internet connectivity
+
+### Search Timeout
+
+```javascript
+try {
+    const results = await player.search(query);
+    if (!results.tracks.length) {
+        return interaction.reply('❌ No tracks found!');
+    }
+} catch (error) {
+    console.error('Search failed:', error);
+    return interaction.reply('❌ Search failed, please try again!');
+}
+```
+
+## Performance Issues
+
+### High Memory Usage
+
+Monitor and limit concurrent connections:
+
+```javascript
+const MAX_PLAYERS = 50;
+if (client.aqua.players.size >= MAX_PLAYERS) {
+    return interaction.reply('❌ Too many active players, please try again later!');
+}
+```
+
+### Audio Lag or Stuttering
+
+**Solutions:**
+- Increase buffer size in Lavalink configuration
+- Use a dedicated server for Lavalink
+- Check network bandwidth and latency
+- Consider using multiple Lavalink nodes for load balancing
+
+## Debug Mode
+
+Enable debug logging to troubleshoot issues:
+
+```javascript
+const { Aqua } = require('aqualink');
+
+const aqua = new Aqua(client, {
+    nodes: [],
+    debug: true 
+});
+
+aqua.on('debug', (message) => {
+    console.log('[DEBUG]', message);
+});
+```
+
+## Getting Help
+
+If you're still experiencing issues:
+
+1. **Check the logs** - Both your bot logs and Lavalink server logs
+2. **Update dependencies** - Ensure you're using the latest version of Aqualink
+3. **Test with minimal code** - Create a simple reproduction case
+4. **Join our Discord** - Get help from the community
+5. **Open an issue** - Report bugs on GitHub with detailed information
+
+<Note>
+When reporting issues, always include:
+- Aqualink version
+- Node.js version  
+- Lavalink version
+- Complete error messages
+- Minimal reproduction code
+</Note>
