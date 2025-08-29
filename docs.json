@@ -23,41 +23,41 @@
           {
             "group": "Essentials",
             "pages": [
-              "essentials/markdown"
+              "pages/markdown"
             ]
           },
           {
             "group": "Advanced Features",
             "pages": [
-              "advanced/failover",
-              "advanced/multi-node"
+              "pages/failover",
+              "pages/multi-node"
             ]
           },
           {
             "group": "Usage & Implementation",
             "pages": [
-              "usage/Tracks",
-              "usage/Queue"
+              "pages/Tracks",
+              "pages/Queue"
             ]
           },
           {
             "group": "Events & Integration",
             "pages": [
-              "events/events"
+              "pages/events"
             ]
           },
           {
             "group": "User Guides",
             "pages": [
-              "guides/filters",
-              "guides/player",
-              "guides/search"
+              "pages/filters",
+              "pages/player",
+              "pages/search"
             ]
           },
           {
             "group": "Support",
             "pages": [
-              "more/Troubleshooting"
+              "pages/Troubleshooting"
             ]
           }
         ]
