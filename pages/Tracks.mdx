@@ -1,0 +1,384 @@
+---
+title: "Playing Tracks"
+description: "Learn how to search for and play tracks with AquaLink"
+icon: "music"
+---
+
+## Playing Tracks
+
+This section demonstrates how to search for and play tracks. It covers the entire process from handling a user command to getting music playing in a voice channel.
+
+## Complete Play Command Example
+
+This example shows a complete play command for a Discord bot using slash commands.
+
+```javascript
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isCommand() || interaction.commandName !== 'play') return;
+
+    const query = interaction.options.getString('query');
+    const member = interaction.member;
+
+    if (!member.voice.channel) {
+        return interaction.reply({ 
+            content: '❌ You must be in a voice channel to play music.', 
+            ephemeral: true 
+        });
+    }
+
+    const permissions = member.voice.channel.permissionsFor(interaction.guild.members.me);
+    if (!permissions.has(['Connect', 'Speak'])) {
+        return interaction.reply({
+            content: '❌ I need Connect and Speak permissions in your voice channel!',
+            ephemeral: true
+        });
+    }
+
+    try {
+        let player = client.aqua.players.get(interaction.guild.id);
+        if (!player) {
+            player = client.aqua.createConnection({
+                guildId: interaction.guild.id,
+                textChannel: interaction.channel.id,
+                voiceChannel: member.voice.channel.id,
+                deaf: true
+            });
+        }
+
+        const result = await client.aqua.search(query, member);
+
+        if (!result.tracks.length) {
+            return interaction.reply({ 
+                content: '❌ No tracks found for your query.', 
+                ephemeral: true 
+            });
+        }
+
+        const track = result.tracks[0];
+        player.queue.add(track);
+
+        const embed = {
+            title: '🎵 Track Added to Queue',
+            description: `**${track.title}**\nBy ${track.author}`,
+            color: 0x00ff00,
+            thumbnail: { url: track.thumbnail },
+            fields: [
+                { name: 'Duration', value: formatDuration(track.duration), inline: true },
+                { name: 'Position in Queue', value: `${player.queue.length}`, inline: true },
+                { name: 'Requested by', value: `${member.displayName}`, inline: true }
+            ]
+        };
+
+        await interaction.reply({ embeds: [embed] });
+
+        if (!player.playing && !player.paused) {
+            player.play();
+        }
+
+    } catch (error) {
+        console.error('Play command error:', error);
+        return interaction.reply({
+            content: '❌ An error occurred while processing your request.',
+            ephemeral: true
+        });
+    }
+});
+
+function formatDuration(ms) {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    
+    if (hours > 0) {
+        return `${hours}:${(minutes % 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${(seconds % 60).toString().padStart(2, '0')}`;
+}
+```
+
+## Search Methods
+
+AquaLink supports multiple ways to search for tracks:
+
+<Tabs>
+  <Tab title="Basic Search">
+    ```javascript
+    const result = await client.aqua.search('never gonna give you up', interaction.member);
+    
+    if (result.tracks.length) {
+        const track = result.tracks[0];
+        player.queue.add(track);
+        player.play();
+    }
+    ```
+  </Tab>
+
+  <Tab title="Platform-Specific Search">
+    ```javascript
+    const ytResult = await client.aqua.search('ytsearch:despacito', interaction.member);
+    
+    const scResult = await client.aqua.search('scsearch:lo-fi hip hop', interaction.member);
+    
+    const spResult = await client.aqua.search('spsearch:imagine dragons', interaction.member);
+    
+    const urlResult = await client.aqua.search('https://www.youtube.com/watch?v=dQw4w9WgXcQ', interaction.member);
+    ```
+  </Tab>
+
+  <Tab title="Advanced Search Options">
+    ```javascript
+    const result = await client.aqua.search(query, interaction.member, {
+        source: 'youtube', 
+        limit: 10 
+    });
+    
+    if (result.loadType === 'LOAD_FAILED') {
+        return interaction.reply('❌ Failed to load track!');
+    }
+    
+    if (result.loadType === 'NO_MATCHES') {
+        return interaction.reply('❌ No tracks found!');
+    }
+    
+    if (result.loadType === 'TRACK_LOADED') {
+        player.queue.add(result.tracks[0]);
+    }
+    
+    if (result.loadType === 'PLAYLIST_LOADED') {
+        player.queue.add(...result.tracks);
+        return interaction.reply(`✅ Added ${result.tracks.length} tracks from playlist!`);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Track Information
+
+### Accessing Track Properties
+
+```javascript
+const currentTrack = player.current;
+
+if (currentTrack) {
+    console.log('Title:', currentTrack.title);
+    console.log('Author:', currentTrack.author);
+    console.log('Duration:', currentTrack.duration); 
+    console.log('URL:', currentTrack.uri);
+    console.log('Thumbnail:', currentTrack.thumbnail);
+    console.log('Encoded:', currentTrack.encoded); 
+    console.log('Requester:', currentTrack.requester); 
+}
+```
+
+### Creating Track Display
+
+```javascript
+function createTrackEmbed(track, position = 1) {
+    return {
+        title: '🎵 Now Playing',
+        description: `**${track.title}**`,
+        color: 0x1db954,
+        thumbnail: { url: track.thumbnail },
+        fields: [
+            { name: 'Artist', value: track.author, inline: true },
+            { name: 'Duration', value: formatDuration(track.duration), inline: true },
+            { name: 'Requested by', value: track.requester.displayName, inline: true },
+            { name: 'Position', value: `${position} of ${player.queue.length + 1}`, inline: true }
+        ],
+        footer: { text: 'Use /skip to skip this track' }
+    };
+}
+```
+
+## Playlist Handling
+
+### Loading Playlists
+
+```javascript
+async function handlePlaylistLoad(interaction, query) {
+    const result = await client.aqua.search(query, interaction.member);
+    
+    if (result.loadType === 'PLAYLIST_LOADED') {
+        const playlist = result.playlist;
+        const tracks = result.tracks;
+        
+        player.queue.add(...tracks);
+        
+        const embed = {
+            title: '📋 Playlist Added',
+            description: `**${playlist.name}**`,
+            color: 0x9932cc,
+            fields: [
+                { name: 'Tracks', value: `${tracks.length}`, inline: true },
+                { name: 'Duration', value: formatDuration(tracks.reduce((acc, track) => acc + track.duration, 0)), inline: true },
+                { name: 'Added by', value: interaction.member.displayName, inline: true }
+            ]
+        };
+        
+        await interaction.reply({ embeds: [embed] });
+        
+        if (!player.playing && !player.paused) {
+            player.play();
+        }
+    }
+}
+```
+
+### Playlist Information
+
+```javascript
+if (result.playlist) {
+    console.log('Playlist Name:', result.playlist.name);
+    console.log('Playlist Duration:', result.playlist.duration);
+    console.log('Track Count:', result.tracks.length);
+    console.log('Selected Track:', result.playlist.selectedTrack);
+}
+```
+
+## Queue Management
+
+### Adding Multiple Tracks
+
+```javascript
+player.queue.add(track);
+
+player.queue.add(track1, track2, track3);
+
+player.queue.add(...trackArray);
+
+player.queue.add(track, 0); 
+```
+
+### Queue Information
+
+```javascript
+// Queue properties
+console.log('Queue length:', player.queue.length);
+console.log('Total duration:', player.queue.duration);
+console.log('Is empty:', player.queue.empty);
+
+const nextTrack = player.queue[0]; 
+const allTracks = player.queue.tracks;
+
+player.queue.clear();
+player.queue.remove(0); 
+player.queue.shuffle(); 
+```
+
+## Auto-Play Features
+
+### Continuous Playback
+
+```javascript
+client.aqua.on('trackEnd', (player, track, payload) => {
+    if (payload.reason === 'FINISHED') {
+        if (player.queue.length > 0) {
+            player.play(); 
+        } else {
+            setTimeout(() => {
+                if (player.queue.length === 0) {
+                    player.destroy();
+                }
+            }, 300000); 
+        }
+    }
+});
+```
+
+### Smart Queue Management
+
+```javascript
+client.aqua.on('trackError', (player, track, payload) => {
+    console.log(`Track failed: ${track.title} - ${payload.exception.message}`);
+    
+    if (player.queue.length > 0) {
+        player.skip();
+    } else {
+        player.textChannel.send('❌ No more tracks to play!');
+    }
+});
+
+client.aqua.on('trackStuck', (player, error, track) => {
+    console.log(`Track stuck: ${track.title}`);
+    player.skip(); 
+});
+```
+
+## Error Handling
+
+### Comprehensive Error Handling
+
+```javascript
+async function playTrack(interaction, query) {
+    try {
+        if (!interaction.member.voice.channel) {
+            return interaction.reply({
+                content: '❌ You need to be in a voice channel!',
+                ephemeral: true
+            });
+        }
+        
+        const player = client.aqua.createConnection({
+            guildId: interaction.guild.id,
+            textChannel: interaction.channel.id,
+            voiceChannel: interaction.member.voice.channel.id,
+            deaf: true
+        });
+        
+        const searchPromise = client.aqua.search(query, interaction.member);
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Search timeout')), 10000)
+        );
+        
+        const result = await Promise.race([searchPromise, timeoutPromise]);
+        
+        if (!result || !result.tracks || result.tracks.length === 0) {
+            return interaction.reply({
+                content: '❌ No tracks found for your search.',
+                ephemeral: true
+            });
+        }
+        
+        const track = result.tracks[0];
+        player.queue.add(track);
+        
+        await interaction.reply({
+            content: `✅ Added **${track.title}** to the queue!`
+        });
+        
+        if (!player.playing && !player.paused) {
+            player.play();
+        }
+        
+    } catch (error) {
+        console.error('Play command error:', error);
+        
+        if (error.message === 'Search timeout') {
+            return interaction.reply({
+                content: '⏱️ Search timed out, please try again.',
+                ephemeral: true
+            });
+        }
+        
+        if (error.code === 50013) { 
+            return interaction.reply({
+                content: '❌ I don\'t have permission to join your voice channel!',
+                ephemeral: true
+            });
+        }
+        
+        return interaction.reply({
+            content: '❌ An error occurred while processing your request.',
+            ephemeral: true
+        });
+    }
+}
+```
+
+<Warning>
+Always validate user permissions and bot permissions before attempting to create connections or play tracks. This prevents common errors and improves user experience.
+</Warning>
+
+<Tip>
+Use embeds to provide rich information about tracks and playlists. Users appreciate seeing thumbnails, duration, and other metadata when tracks are added to the queue.
+</Tip>
