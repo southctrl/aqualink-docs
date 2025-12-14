@@ -1,0 +1,5 @@
+[data-theme] .sidebar [aria-current='page'],
+[data-theme] .sidebar .active {
+  background: #2563eb !important;
+  color: #fff !important;
+}
